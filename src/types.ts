@@ -101,6 +101,8 @@ export type Module = {
   path: string;
   content: string;
   modified: string;
+  fileName?: string;
+  fileSize?: string;
 };
 
 export type ModuleKind = 'base' | 'file-explorer' | 'logger' | 'powershell';

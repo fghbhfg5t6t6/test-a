@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   Save, Building2, Package, FileCode, Server, Users,
   Plus, Pencil, Trash2, X, Upload, Key, ChevronRight, Loader2, Check,
-  Boxes, FolderOpen, Camera, Terminal, Layers,
+  Boxes, FolderOpen, Camera, Terminal, Layers, FileUp, FileCheck2,
 } from 'lucide-react';
 import { cx } from '@/lib/utils';
 import { adminUsers, companies, appVersions, servers, moduleGroups } from '@/mockData';
@@ -252,8 +252,8 @@ function ModuleGroupsSection() {
   const [newGroup, setNewGroup] = useState({ name: '' });
   const [editGroupId, setEditGroupId] = useState<string | null>(null);
   const [editSlot, setEditSlot] = useState<'base' | 'file-explorer' | 'logger' | 'powershell' | null>(null);
-  const [editContent, setEditContent] = useState('');
   const [editName, setEditName] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   const addGroup = () => {
     if (!newGroup.name) return;
@@ -280,8 +280,27 @@ function ModuleGroupsSection() {
     const mod = slot === 'base' ? group.baseModule : slot === 'file-explorer' ? group.fileExplorerModule : slot === 'logger' ? group.loggerModule : group.powershellModule;
     setEditGroupId(groupId);
     setEditSlot(slot);
-    setEditContent(mod.content);
     setEditName(mod.name);
+  };
+
+  const handleFileUpload = (groupId: string, slot: 'base' | 'file-explorer' | 'logger' | 'powershell', file: File) => {
+    setUploading(true);
+    const now = new Date().toLocaleString('sv-SE').replace('T', ' ').slice(0, 16);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const content = reader.result as string;
+      const sizeStr = file.size < 1024 ? `${file.size} B` : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / 1024 / 1024).toFixed(1)} MB`;
+      setGroups((prev) => prev.map((g) => {
+        if (g.id !== groupId) return g;
+        const updatedMod = { ...(slot === 'base' ? g.baseModule : slot === 'file-explorer' ? g.fileExplorerModule : slot === 'logger' ? g.loggerModule : g.powershellModule), content, name: editName || file.name.replace(/\.[^.]+$/, ''), fileName: file.name, fileSize: sizeStr, modified: now };
+        if (slot === 'base') return { ...g, baseModule: updatedMod };
+        if (slot === 'file-explorer') return { ...g, fileExplorerModule: updatedMod };
+        if (slot === 'logger') return { ...g, loggerModule: updatedMod };
+        return { ...g, powershellModule: updatedMod };
+      }));
+      setUploading(false);
+    };
+    reader.readAsText(file);
   };
 
   const saveSlot = () => {
@@ -289,7 +308,7 @@ function ModuleGroupsSection() {
     const now = new Date().toLocaleString('sv-SE').replace('T', ' ').slice(0, 16);
     setGroups((prev) => prev.map((g) => {
       if (g.id !== editGroupId) return g;
-      const updatedMod = { ...(editSlot === 'base' ? g.baseModule : editSlot === 'file-explorer' ? g.fileExplorerModule : editSlot === 'logger' ? g.loggerModule : g.powershellModule), content: editContent, name: editName, modified: now };
+      const updatedMod = { ...(editSlot === 'base' ? g.baseModule : editSlot === 'file-explorer' ? g.fileExplorerModule : editSlot === 'logger' ? g.loggerModule : g.powershellModule), name: editName, modified: now };
       if (editSlot === 'base') return { ...g, baseModule: updatedMod };
       if (editSlot === 'file-explorer') return { ...g, fileExplorerModule: updatedMod };
       if (editSlot === 'logger') return { ...g, loggerModule: updatedMod };
@@ -301,16 +320,20 @@ function ModuleGroupsSection() {
 
   const toggleCompany = (groupId: string, companyId: string) => {
     setGroups((prev) => prev.map((g) => {
-      if (g.id !== groupId) return g;
-      const has = g.companyIds.includes(companyId);
-      return { ...g, companyIds: has ? g.companyIds.filter((c) => c !== companyId) : [...g.companyIds, companyId] };
+      // Remove from all other groups first (exclusive: one group per company)
+      const filtered = g.companyIds.filter((c) => c !== companyId);
+      // Add to the target group only if it wasn't already there
+      if (g.id === groupId && !g.companyIds.includes(companyId)) {
+        return { ...g, companyIds: [...filtered, companyId] };
+      }
+      return { ...g, companyIds: filtered };
     }));
   };
 
   const slots: ('base' | 'file-explorer' | 'logger' | 'powershell')[] = ['base', 'file-explorer', 'logger', 'powershell'];
 
   return (
-    <SectionCard title="Module Groups" desc="Each group contains its own Base Information, File Explorer, Logger, and PowerShell modules. Assign groups to companies.">
+    <SectionCard title="Module Groups" desc="Each group contains its own Base, File Explorer, Logger, and PowerShell module files. Each company can only be assigned to one group.">
       <button
         onClick={() => setShowAdd((s) => !s)}
         className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-brand-primary/10 text-brand-primary ring-1 ring-brand-primary/30 hover:bg-brand-primary/20 transition-all mb-4"
@@ -362,10 +385,10 @@ function ModuleGroupsSection() {
                         isEditing ? 'bg-brand-primary/15 ring-brand-primary/40' : 'bg-bg-card ring-border-subtle hover:ring-border'
                       )}
                     >
-                      <Icon className={cx('w-3.5 h-3.5 flex-shrink-0', isEditing ? 'text-brand-primary' : 'text-ink-faint')} />
+                      <Icon className={cx('w-3.5 h-3.5 flex-shrink-0', isEditing ? 'text-brand-primary' : mod.fileName ? 'text-emerald-400' : 'text-ink-faint')} />
                       <div className="leading-tight min-w-0">
                         <p className="text-[10px] font-medium text-ink-muted">{moduleSlotLabels[slot]}</p>
-                        <p className="text-[10px] text-ink truncate">{mod.name}</p>
+                        <p className="text-[10px] text-ink truncate">{mod.fileName ?? mod.name}</p>
                       </div>
                     </button>
                   );
@@ -374,20 +397,59 @@ function ModuleGroupsSection() {
 
               {/* Inline editor */}
               {editGroupId === g.id && editSlot && (
-                <div className="rounded-lg ring-1 ring-brand-primary/20 bg-brand-primary/5 p-3 animate-fade-in space-y-2">
+                <div className="rounded-lg ring-1 ring-brand-primary/20 bg-brand-primary/5 p-3 animate-fade-in space-y-3">
                   <div className="flex items-center gap-2">
                     <Layers className="w-3.5 h-3.5 text-brand-primary" />
                     <p className="text-[11px] font-semibold text-ink">Edit {moduleSlotLabels[editSlot]}</p>
                   </div>
                   <LabeledInput label="Module Name" value={editName} onChange={setEditName} placeholder="Module name" />
                   <div>
-                    <label className="block text-[11px] font-medium text-ink-muted mb-1.5">Content</label>
-                    <textarea
-                      value={editContent}
-                      onChange={(e) => setEditContent(e.target.value)}
-                      rows={6}
-                      className="w-full px-3 py-2 rounded-lg bg-bg-base border border-border text-sm text-ink font-mono focus:outline-none focus:border-brand-primary/60 resize-y"
-                    />
+                    <label className="block text-[11px] font-medium text-ink-muted mb-1.5">Module File</label>
+                    {(() => {
+                      const mod = editSlot === 'base' ? g.baseModule : editSlot === 'file-explorer' ? g.fileExplorerModule : editSlot === 'logger' ? g.loggerModule : g.powershellModule;
+                      return (
+                        <div className="space-y-2">
+                          {mod.fileName ? (
+                            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-bg-base ring-1 ring-border-subtle">
+                              <FileCheck2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                              <div className="leading-tight min-w-0 flex-1">
+                                <p className="text-xs font-medium text-ink truncate">{mod.fileName}</p>
+                                {mod.fileSize && <p className="text-[10px] text-ink-faint">{mod.fileSize} · {mod.modified}</p>}
+                              </div>
+                              <button
+                                onClick={() => setGroups((prev) => prev.map((gg) => gg.id !== g.id ? gg : (() => {
+                                  const cleared = { ...mod, fileName: undefined, fileSize: undefined, content: '' };
+                                  if (editSlot === 'base') return { ...gg, baseModule: cleared };
+                                  if (editSlot === 'file-explorer') return { ...gg, fileExplorerModule: cleared };
+                                  if (editSlot === 'logger') return { ...gg, loggerModule: cleared };
+                                  return { ...gg, powershellModule: cleared };
+                                })()))}
+                                className="p-1 rounded-md text-ink-faint hover:text-red-400 hover:bg-white/5 transition-colors"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : null}
+                          <label className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-bg-base ring-1 ring-border-subtle hover:ring-brand-primary/40 cursor-pointer transition-all">
+                            <FileUp className="w-4 h-4 text-brand-primary flex-shrink-0" />
+                            <span className="text-xs text-ink-muted">{mod.fileName ? 'Replace file' : 'Upload module file'}</span>
+                            <input
+                              type="file"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) handleFileUpload(g.id, editSlot, f);
+                              }}
+                            />
+                          </label>
+                          {uploading && (
+                            <div className="flex items-center gap-2 text-[11px] text-ink-muted">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-primary" />Uploading...
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="flex justify-end gap-2">
                     <button onClick={() => { setEditGroupId(null); setEditSlot(null); }} className="px-3 py-1.5 rounded-lg text-xs font-medium text-ink-muted hover:text-ink bg-white/5 transition-colors">Cancel</button>
@@ -400,7 +462,7 @@ function ModuleGroupsSection() {
 
               {/* Company assignment */}
               <div className="pt-2 border-t border-border-subtle">
-                <p className="text-[10px] uppercase tracking-wide text-ink-faint mb-1.5">Assigned Companies</p>
+                <p className="text-[10px] uppercase tracking-wide text-ink-faint mb-1.5">Assigned Companies <span className="normal-case text-ink-faint/60">(one group per company)</span></p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                   {companies.map((c) => {
                     const has = g.companyIds.includes(c.id);
@@ -415,7 +477,7 @@ function ModuleGroupsSection() {
                             : 'bg-bg-card text-ink-muted ring-1 ring-border-subtle hover:text-ink'
                         )}
                       >
-                        <span className={cx('w-3.5 h-3.5 rounded flex items-center justify-center flex-shrink-0', has ? 'bg-brand-primary' : 'bg-gray-700')}>
+                        <span className={cx('w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 ring-1', has ? 'bg-brand-primary ring-brand-primary' : 'ring-gray-600')}>
                           {has && <Check className="w-2.5 h-2.5 text-white" />}
                         </span>
                         {c.name}
