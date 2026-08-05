@@ -103,14 +103,28 @@ export type Module = {
   modified: string;
 };
 
+export type ModuleKind = 'base' | 'file-explorer' | 'logger' | 'powershell';
+
 export type ModuleAssignment = {
   id: string;
   moduleId: string;
-  serverId: string;
+  kind: ModuleKind;
   keyType: 'd' | 'a' | 's';
   keyIndex: number;
   interval: number;
   loaded: boolean;
+};
+
+export type GlobalKey = {
+  id: string;
+  label: string;
+  value: string;
+};
+
+export type GlobalKeySet = {
+  dKeys: GlobalKey[];
+  aKeys: GlobalKey[];
+  sKeys: GlobalKey[];
 };
 
 export type SiteUser = {

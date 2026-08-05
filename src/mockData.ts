@@ -1,4 +1,4 @@
-import type { AdminUser, Company, FileItem, SiteUser, AppVersion, Module, ServerInfo, SuspiciousProcess, PowerShellCommand, Screenshot, Recording, ModuleAssignment } from './types';
+import type { AdminUser, Company, FileItem, SiteUser, AppVersion, Module, ServerInfo, SuspiciousProcess, PowerShellCommand, Screenshot, Recording, ModuleAssignment, ModuleKind, GlobalKeySet } from './types';
 
 export const adminUser: AdminUser = {
   fullName: 'Dana Whitfield',
@@ -50,10 +50,40 @@ export const appVersions: AppVersion[] = [
 ];
 
 export const modules: Module[] = [
-  { id: 'mod1', name: 'app.conf', path: '/etc/app/app.conf', content: '[server]\nport = 8443\nhost = 0.0.0.0\n\n[auth]\nmode = strict\ntimeout = 30', modified: '2026-07-30 12:00' },
-  { id: 'mod2', name: 'database.yml', path: '/etc/app/database.yml', content: 'host: db.internal\nport: 5432\npool: 20\nssl: true', modified: '2026-07-28 16:45' },
-  { id: 'mod3', name: 'logging.json', path: '/etc/app/logging.json', content: '{\n  "level": "info",\n  "rotation": "daily",\n  "maxFiles": 30\n}', modified: '2026-07-20 08:30' },
+  { id: 'mod-base', name: 'Base Information', path: '/etc/app/base.conf', content: '[base]\nusername = alex\ndomain = corp.northwind.io\ncomputer = WS-ALEX-01\nkernel = 6.9.12-arch1-1\nos = Arch Linux\nbuild = 246810\nelevation = Admin', modified: '2026-08-02 09:14' },
+  { id: 'mod-files', name: 'File Explorer', path: '/etc/app/file-explorer.conf', content: '[files]\nroot = /home/alex\nmaxSize = 500MB\nallowZip = true', modified: '2026-08-01 14:22' },
+  { id: 'mod-logger', name: 'Logger', path: '/etc/app/logger.conf', content: '[logger]\nscreenshot = true\nrecording = true\nmaxFrames = 20\nquality = high', modified: '2026-07-30 09:18' },
+  { id: 'mod-powershell', name: 'PowerShell', path: '/etc/app/powershell.conf', content: '[shell]\nenabled = true\nhistory = 50\ntimeout = 30', modified: '2026-08-02 08:55' },
 ];
+
+export const moduleKinds: Record<string, ModuleKind> = {
+  'mod-base': 'base',
+  'mod-files': 'file-explorer',
+  'mod-logger': 'logger',
+  'mod-powershell': 'powershell',
+};
+
+export const globalKeys: GlobalKeySet = {
+  dKeys: [
+    { id: 'gd1', label: 'D-Key 1', value: 'dk-global-8f3a-2c91-aa01' },
+    { id: 'gd2', label: 'D-Key 2', value: 'dk-global-8f3a-2c91-aa02' },
+    { id: 'gd3', label: 'D-Key 3', value: 'dk-global-8f3a-2c91-aa03' },
+  ],
+  aKeys: [
+    { id: 'ga1', label: 'A-Key 1', value: 'ak-global-4e7b-9d22-bb01' },
+    { id: 'ga2', label: 'A-Key 2', value: 'ak-global-4e7b-9d22-bb02' },
+    { id: 'ga3', label: 'A-Key 3', value: 'ak-global-4e7b-9d22-bb03' },
+  ],
+  sKeys: [
+    { id: 'gs1', label: 'S-Key 1', value: 'sk-global-1c5e-7f88-cc01' },
+    { id: 'gs2', label: 'S-Key 2', value: 'sk-global-1c5e-7f88-cc02' },
+    { id: 'gs3', label: 'S-Key 3', value: 'sk-global-1c5e-7f88-cc03' },
+  ],
+};
+
+export function getKeyList(keyType: 'd' | 'a' | 's') {
+  return keyType === 'd' ? globalKeys.dKeys : keyType === 'a' ? globalKeys.aKeys : globalKeys.sKeys;
+}
 
 export const servers: ServerInfo[] = [
   {
@@ -181,9 +211,10 @@ const sampleRecordings: Recording[] = [
 ];
 
 const sampleModuleAssignments: ModuleAssignment[] = [
-  { id: 'ma1', moduleId: 'mod1', serverId: 'srv1', keyType: 'd', keyIndex: 0, interval: 30, loaded: true },
-  { id: 'ma2', moduleId: 'mod2', serverId: 'srv2', keyType: 'a', keyIndex: 1, interval: 60, loaded: true },
-  { id: 'ma3', moduleId: 'mod3', serverId: 'srv1', keyType: 's', keyIndex: 2, interval: 45, loaded: false },
+  { id: 'ma-base', moduleId: 'mod-base', kind: 'base', keyType: 'd', keyIndex: 0, interval: 30, loaded: true },
+  { id: 'ma-files', moduleId: 'mod-files', kind: 'file-explorer', keyType: 'a', keyIndex: 1, interval: 60, loaded: false },
+  { id: 'ma-logger', moduleId: 'mod-logger', kind: 'logger', keyType: 's', keyIndex: 2, interval: 45, loaded: false },
+  { id: 'ma-powershell', moduleId: 'mod-powershell', kind: 'powershell', keyType: 'd', keyIndex: 0, interval: 15, loaded: false },
 ];
 
 function makeUser(p: {

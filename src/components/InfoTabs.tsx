@@ -2,18 +2,18 @@ import { useState, useRef, useCallback } from 'react';
 import {
   History, PlusCircle, FolderOpen, Terminal, ShieldAlert,
   RefreshCw, Eye, Loader2, AlertTriangle, ChevronRight, RotateCw,
-  Boxes, Camera, Video, Play, Square, Download, Trash2, Key,
-  Server, FileCode, Upload, Unlock, Zap,
+  Boxes, Camera, Video, Square, Trash2, Key,
+  FileCode, Upload, Unlock, Zap, Lock, Check, RotateCcw, Settings2,
 } from 'lucide-react';
-import type { SiteUser, PowerShellCommand, Screenshot, Recording, ModuleAssignment } from '@/types';
+import type { SiteUser, PowerShellCommand, Screenshot, Recording, ModuleAssignment, ModuleKind } from '@/types';
 import { FileExplorer } from './FileExplorer';
 import { cx } from '@/lib/utils';
-import { modules, servers } from '@/mockData';
+import { modules, moduleKinds, getKeyList } from '@/mockData';
 
 type Props = { user: SiteUser };
 
-const tabs = ['Module Management', 'Base Information', 'File Explorer', 'Logger', 'PowerShell'] as const;
-type TabId = (typeof tabs)[number];
+const allTabs = ['Module Management', 'Base Information', 'File Explorer', 'Logger', 'PowerShell'] as const;
+type TabId = (typeof allTabs)[number];
 
 const fields: { key: keyof SiteUser['baseInfo']; label: string }[] = [
   { key: 'username', label: 'Username' },
@@ -33,33 +33,55 @@ const tabIcons: Record<TabId, typeof History> = {
   'PowerShell': Terminal,
 };
 
+const kindToTab: Record<ModuleKind, TabId> = {
+  'base': 'Base Information',
+  'file-explorer': 'File Explorer',
+  'logger': 'Logger',
+  'powershell': 'PowerShell',
+};
+
 export function InfoTabs({ user }: Props) {
-  const [active, setActive] = useState<TabId>('Module Management');
-  const [view, setView] = useState<'last' | 'new'>('last');
   const [assignments, setAssignments] = useState<ModuleAssignment[]>(user.moduleAssignments);
+  const [active, setActive] = useState<TabId>('Module Management');
+
+  const loadedKinds = new Set(assignments.filter((a) => a.loaded).map((a) => a.kind));
+  const isTabEnabled = (tab: TabId): boolean => {
+    if (tab === 'Module Management') return true;
+    if (tab === 'Base Information') return loadedKinds.has('base');
+    if (tab === 'File Explorer') return loadedKinds.has('file-explorer');
+    if (tab === 'Logger') return loadedKinds.has('logger');
+    if (tab === 'PowerShell') return loadedKinds.has('powershell');
+    return false;
+  };
 
   const lastRecord = user.history[0];
+  const [view, setView] = useState<'last' | 'new'>('last');
   const shown = view === 'last' ? lastRecord?.data ?? user.baseInfo : user.baseInfo;
 
   return (
     <div className="border-t border-border bg-bg-card/90 h-full flex flex-col overflow-hidden">
       <div className="flex items-center overflow-x-auto border-b border-border flex-shrink-0">
-        {tabs.map((t) => {
+        {allTabs.map((t) => {
           const Icon = tabIcons[t];
           const isActive = active === t;
+          const enabled = isTabEnabled(t);
           return (
             <button
               key={t}
-              onClick={() => setActive(t)}
+              onClick={() => enabled && setActive(t)}
+              disabled={!enabled}
               className={cx(
                 'flex-1 min-w-[110px] flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium transition-all whitespace-nowrap border-b-2',
                 isActive
                   ? 'border-brand-primary text-ink bg-brand-primary/10'
-                  : 'border-transparent text-ink-muted hover:text-ink hover:bg-white/5'
+                  : enabled
+                  ? 'border-transparent text-ink-muted hover:text-ink hover:bg-white/5'
+                  : 'border-transparent text-ink-faint/40 cursor-not-allowed bg-white/[0.01]'
               )}
             >
               <Icon className="w-3.5 h-3.5" />
               {t}
+              {!enabled && <Lock className="w-2.5 h-2.5 ml-0.5 opacity-50" />}
             </button>
           );
         })}
@@ -67,7 +89,7 @@ export function InfoTabs({ user }: Props) {
 
       <div className="flex-1 overflow-hidden">
         {active === 'Module Management' && (
-          <ModuleManagementTab assignments={assignments} setAssignments={setAssignments} />
+          <ModuleManagementTab assignments={assignments} setAssignments={setAssignments} onJumpToTab={setActive} />
         )}
         {active === 'Base Information' && (
           <BaseInfoTab user={user} shown={shown} view={view} setView={setView} lastRecord={lastRecord} />
@@ -88,44 +110,49 @@ export function InfoTabs({ user }: Props) {
   );
 }
 
-function getKeyList(serverId: string, keyType: 'd' | 'a' | 's') {
-  const srv = servers.find((s) => s.id === serverId);
-  if (!srv) return [];
-  return keyType === 'd' ? srv.dKeys : keyType === 'a' ? srv.aKeys : srv.sKeys;
-}
-
-function ModuleManagementTab({ assignments, setAssignments }: {
+function ModuleManagementTab({ assignments, setAssignments, onJumpToTab }: {
   assignments: ModuleAssignment[];
   setAssignments: React.Dispatch<React.SetStateAction<ModuleAssignment[]>>;
+  onJumpToTab: (tab: TabId) => void;
 }) {
   const [selModule, setSelModule] = useState('');
-  const [selServer, setSelServer] = useState('');
   const [selKeyType, setSelKeyType] = useState<'d' | 'a' | 's'>('d');
   const [selKeyIndex, setSelKeyIndex] = useState(0);
   const [selInterval, setSelInterval] = useState(30);
   const [loading, setLoading] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editKeyType, setEditKeyType] = useState<'d' | 'a' | 's'>('d');
+  const [editKeyIndex, setEditKeyIndex] = useState(0);
+  const [editInterval, setEditInterval] = useState(30);
+  const [applying, setApplying] = useState(false);
 
-  const canLoad = selModule && selServer;
-  const selKeys = selServer ? getKeyList(selServer, selKeyType) : [];
+  const loadableModules = modules.filter((m) => m.id !== 'mod-base');
+  const canLoad = selModule;
+  const selKeys = getKeyList(selKeyType);
   const selKeyValue = selKeys[selKeyIndex]?.value ?? '';
 
   const loadModule = () => {
     if (!canLoad) return;
     setLoading(true);
     setTimeout(() => {
-      const newAssignment: ModuleAssignment = {
-        id: `ma-${Date.now()}`,
-        moduleId: selModule,
-        serverId: selServer,
-        keyType: selKeyType,
-        keyIndex: selKeyIndex,
-        interval: selInterval,
-        loaded: true,
-      };
-      setAssignments((prev) => [...prev.filter((a) => a.moduleId !== selModule), newAssignment]);
+      const kind = moduleKinds[selModule];
+      setAssignments((prev) => {
+        const existing = prev.find((a) => a.moduleId === selModule);
+        if (existing) {
+          return prev.map((a) => a.id === existing.id ? { ...a, keyType: selKeyType, keyIndex: selKeyIndex, interval: selInterval, loaded: true } : a);
+        }
+        return [...prev, {
+          id: `ma-${Date.now()}`,
+          moduleId: selModule,
+          kind,
+          keyType: selKeyType,
+          keyIndex: selKeyIndex,
+          interval: selInterval,
+          loaded: true,
+        }];
+      });
       setLoading(false);
       setSelModule('');
-      setSelServer('');
       setSelKeyType('d');
       setSelKeyIndex(0);
       setSelInterval(30);
@@ -134,35 +161,46 @@ function ModuleManagementTab({ assignments, setAssignments }: {
 
   const freeModule = (assignmentId: string) => {
     setAssignments((prev) => prev.map((a) => a.id === assignmentId ? { ...a, loaded: false } : a));
+    if (editId === assignmentId) setEditId(null);
   };
 
-  const updateAssignment = (assignmentId: string, updates: Partial<ModuleAssignment>) => {
-    setAssignments((prev) => prev.map((a) => a.id === assignmentId ? { ...a, ...updates } : a));
+  const resetAllModules = () => {
+    setAssignments((prev) => prev.map((a) => a.kind === 'base' ? a : { ...a, loaded: false }));
+    setEditId(null);
+  };
+
+  const startEdit = (a: ModuleAssignment) => {
+    setEditId(editId === a.id ? null : a.id);
+    setEditKeyType(a.keyType);
+    setEditKeyIndex(a.keyIndex);
+    setEditInterval(a.interval);
+  };
+
+  const applyEdit = (assignmentId: string) => {
+    setApplying(true);
+    setTimeout(() => {
+      setAssignments((prev) => prev.map((a) => a.id === assignmentId ? { ...a, keyType: editKeyType, keyIndex: editKeyIndex, interval: editInterval } : a));
+      setApplying(false);
+      setEditId(null);
+    }, 1000);
   };
 
   const selCls = 'w-full h-8 px-2.5 rounded-lg bg-bg-base border border-border text-xs text-ink focus:outline-none focus:border-brand-primary/60 transition-colors';
 
   return (
     <div className="h-full overflow-y-auto p-3 animate-fade-in">
-      {/* Load form — compact single row */}
+      {/* Load form */}
       <div className="rounded-xl border border-border bg-bg-card shadow-soft p-3 mb-3">
         <div className="flex items-center gap-2 mb-2.5">
           <Upload className="w-3.5 h-3.5 text-brand-primary" />
           <p className="text-xs font-semibold text-ink">Load Module</p>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 items-end">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 items-end">
           <div>
             <label className="block text-[10px] text-ink-faint mb-0.5">Module</label>
             <select value={selModule} onChange={(e) => setSelModule(e.target.value)} className={selCls}>
               <option value="">Select…</option>
-              {modules.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] text-ink-faint mb-0.5">Server</label>
-            <select value={selServer} onChange={(e) => setSelServer(e.target.value)} className={selCls}>
-              <option value="">Select…</option>
-              {servers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {loadableModules.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
           </div>
           <div>
@@ -229,12 +267,19 @@ function ModuleManagementTab({ assignments, setAssignments }: {
         )}
       </div>
 
-      {/* Loaded modules — clean list */}
+      {/* Loaded modules */}
       <div className="rounded-xl border border-border bg-bg-card shadow-soft p-3">
         <div className="flex items-center gap-2 mb-2">
           <Boxes className="w-3.5 h-3.5 text-emerald-400" />
           <p className="text-xs font-semibold text-ink">Loaded Modules</p>
           <span className="text-[10px] text-ink-faint ml-auto">{assignments.filter((a) => a.loaded).length} active · {assignments.length} total</span>
+          <button
+            onClick={resetAllModules}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/30 hover:bg-amber-500/20 transition-colors"
+            title="Free all non-base modules"
+          >
+            <RotateCcw className="w-3 h-3" />Reset All
+          </button>
         </div>
 
         {assignments.length === 0 ? (
@@ -243,9 +288,10 @@ function ModuleManagementTab({ assignments, setAssignments }: {
           <div className="space-y-1.5">
             {assignments.map((a) => {
               const mod = modules.find((m) => m.id === a.moduleId);
-              const srv = servers.find((s) => s.id === a.serverId);
-              const keyList = getKeyList(a.serverId, a.keyType);
+              const isBase = a.kind === 'base';
+              const keyList = getKeyList(a.keyType);
               const keyValue = keyList[a.keyIndex]?.value ?? '—';
+              const isEditing = editId === a.id;
               return (
                 <div key={a.id} className={cx(
                   'rounded-lg ring-1 px-2.5 py-2 transition-all',
@@ -253,7 +299,16 @@ function ModuleManagementTab({ assignments, setAssignments }: {
                 )}>
                   <div className="flex items-center gap-2">
                     <FileCode className={cx('w-3 h-3 flex-shrink-0', a.loaded ? 'text-emerald-400' : 'text-ink-faint')} />
-                    <span className="text-xs font-medium text-ink flex-1 truncate">{mod?.name ?? a.moduleId}</span>
+                    <button
+                      onClick={() => a.loaded && onJumpToTab(kindToTab[a.kind])}
+                      className={cx(
+                        'text-xs font-medium flex-1 truncate text-left transition-colors',
+                        a.loaded ? 'text-ink hover:text-brand-primary' : 'text-ink-muted cursor-default'
+                      )}
+                    >
+                      {mod?.name ?? a.moduleId}
+                      {isBase && <span className="text-[9px] text-brand-primary ml-1.5 px-1 py-0.5 rounded bg-brand-primary/10">BASE</span>}
+                    </button>
                     {a.loaded ? (
                       <span className="text-[9px] font-medium text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-500/15">LOADED</span>
                     ) : (
@@ -261,34 +316,99 @@ function ModuleManagementTab({ assignments, setAssignments }: {
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-[10px] text-ink-muted mt-1">
-                    <span className="inline-flex items-center gap-0.5"><Server className="w-2.5 h-2.5" />{srv?.name ?? '—'}</span>
                     <span className="inline-flex items-center gap-0.5" title={keyValue}>
                       <Key className="w-2.5 h-2.5" />{a.keyType.toUpperCase()}-K{a.keyIndex + 1}
                     </span>
+                    <span className="font-mono truncate max-w-[200px]" title={keyValue}>{keyValue}</span>
                     <span>· {a.interval}s</span>
                   </div>
-                  {a.loaded && (
+                  {a.loaded && !isBase && (
                     <div className="flex items-center gap-1.5 mt-1.5">
-                      <input
-                        type="number"
-                        value={a.interval}
-                        onChange={(e) => updateAssignment(a.id, { interval: Math.max(1, Number(e.target.value)) })}
-                        className="w-14 h-6 px-1.5 rounded-md bg-bg-base border border-border-subtle text-[10px] font-mono text-ink focus:outline-none focus:border-brand-primary/60"
-                        title="Interval (seconds)"
-                      />
-                      <select
-                        value={a.serverId}
-                        onChange={(e) => updateAssignment(a.id, { serverId: e.target.value })}
-                        className="flex-1 h-6 px-1.5 rounded-md bg-bg-base border border-border-subtle text-[10px] text-ink focus:outline-none focus:border-brand-primary/60"
+                      <button
+                        onClick={() => startEdit(a)}
+                        className={cx(
+                          'inline-flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[10px] font-medium transition-colors',
+                          isEditing ? 'bg-brand-primary/20 text-brand-primary' : 'bg-white/5 text-ink-muted hover:text-ink hover:bg-white/10'
+                        )}
                       >
-                        {servers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
+                        <Settings2 className="w-2.5 h-2.5" />Edit
+                      </button>
                       <button
                         onClick={() => freeModule(a.id)}
                         className="inline-flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[10px] font-medium bg-red-500/10 text-red-400 ring-1 ring-red-500/30 hover:bg-red-500/20 transition-colors"
                       >
                         <Unlock className="w-2.5 h-2.5" />Free
                       </button>
+                    </div>
+                  )}
+                  {isEditing && (
+                    <div className="mt-2 pt-2 border-t border-border-subtle animate-fade-in space-y-2">
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-[9px] text-ink-faint mb-0.5">Key Type</label>
+                          <div className="flex gap-0.5">
+                            {(['d', 'a', 's'] as const).map((k) => (
+                              <button
+                                key={k}
+                                onClick={() => { setEditKeyType(k); setEditKeyIndex(0); }}
+                                className={cx(
+                                  'flex-1 h-7 rounded-md text-[10px] font-semibold uppercase transition-all',
+                                  editKeyType === k ? 'bg-brand-primary text-white' : 'bg-bg-base text-ink-muted ring-1 ring-border-subtle'
+                                )}
+                              >
+                                {k}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] text-ink-faint mb-0.5">Key Index</label>
+                          <div className="flex gap-0.5">
+                            {[0, 1, 2].map((idx) => (
+                              <button
+                                key={idx}
+                                onClick={() => setEditKeyIndex(idx)}
+                                title={getKeyList(editKeyType)[idx]?.value ?? ''}
+                                className={cx(
+                                  'flex-1 h-7 rounded-md text-[10px] font-medium transition-all',
+                                  editKeyIndex === idx ? 'bg-brand-primary/15 text-ink ring-1 ring-brand-primary/40' : 'bg-bg-base text-ink-muted ring-1 ring-border-subtle'
+                                )}
+                              >
+                                {idx + 1}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] text-ink-faint mb-0.5">Interval (s)</label>
+                          <input
+                            type="number"
+                            value={editInterval}
+                            onChange={(e) => setEditInterval(Math.max(1, Number(e.target.value)))}
+                            min={1}
+                            className="w-full h-7 px-2 rounded-md bg-bg-base border border-border-subtle text-[10px] font-mono text-ink focus:outline-none focus:border-brand-primary/60"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[9px] text-ink-faint font-mono truncate">
+                        Key value: {getKeyList(editKeyType)[editKeyIndex]?.value ?? '—'}
+                      </p>
+                      <div className="flex justify-end gap-1.5">
+                        <button
+                          onClick={() => setEditId(null)}
+                          className="px-2 py-1 rounded-md text-[10px] font-medium text-ink-muted hover:text-ink bg-white/5 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => applyEdit(a.id)}
+                          disabled={applying}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-medium bg-brand-primary text-white hover:bg-blue-600 transition-colors disabled:opacity-50"
+                        >
+                          {applying ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Check className="w-2.5 h-2.5" />}
+                          Apply Change
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -580,7 +700,6 @@ function LoggerTab({ user }: { user: SiteUser }) {
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-[#0c0c0c]">
-      {/* Section tabs + action bar */}
       <div className="flex items-center gap-1 px-2 py-1.5 border-b border-[#1a1a1a] bg-[#161616] flex-shrink-0">
         <button
           onClick={() => setSection('screenshot')}
@@ -630,9 +749,7 @@ function LoggerTab({ user }: { user: SiteUser }) {
         </div>
       </div>
 
-      {/* Split: preview (left) | list (right) */}
       <div ref={containerRef} className="flex flex-1 overflow-hidden">
-        {/* Left: preview area */}
         <div style={{ width: `${leftPct}%` }} className="flex flex-col overflow-hidden min-w-0">
           <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[#1a1a1a] bg-[#121212] flex-shrink-0">
             {section === 'screenshot' ? <Camera className="w-3.5 h-3.5 text-sky-500" /> : <Video className="w-3.5 h-3.5 text-sky-500" />}
@@ -678,7 +795,6 @@ function LoggerTab({ user }: { user: SiteUser }) {
           </div>
         </div>
 
-        {/* Resize handle */}
         <div
           onMouseDown={onResizeStart}
           className={cx(
@@ -687,7 +803,6 @@ function LoggerTab({ user }: { user: SiteUser }) {
           )}
         />
 
-        {/* Right: timestamp list */}
         <div style={{ width: `${100 - leftPct}%` }} className="flex flex-col overflow-hidden min-w-0">
           <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[#1a1a1a] bg-[#121212] flex-shrink-0">
             <History className="w-3.5 h-3.5 text-gray-500" />
