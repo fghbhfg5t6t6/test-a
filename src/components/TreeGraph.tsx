@@ -1,29 +1,32 @@
-import { useState } from 'react';
-import { X, Key, Unlock, Zap, FileCode, Check, Loader2, RotateCcw } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { X, Key, Unlock, Zap, FileCode, Check, Loader2, RotateCcw, ShieldAlert } from 'lucide-react';
 import type { SiteUser, ModuleAssignment } from '@/types';
 import { modules, getKeyList } from '@/mockData';
 import { cx } from '@/lib/utils';
+import { ConfirmDialog } from './ConfirmDialog';
 
 type Props = {
   user: SiteUser;
+  assignments: ModuleAssignment[];
+  setAssignments: React.Dispatch<React.SetStateAction<ModuleAssignment[]>>;
   onFriendClick?: (id: string) => void;
 };
 
 const W = 740;
 const H = 340;
-const rootX = 120;
-const rootY = H / 2;
-const moduleNodeX = 440;
-const moduleStartY = 50;
-const moduleSpacing = 55;
 
-export function TreeGraph({ user }: Props) {
-  const [assignments, setAssignments] = useState<ModuleAssignment[]>(user.moduleAssignments);
+export function TreeGraph({ user, assignments, setAssignments }: Props) {
   const [popupAssignment, setPopupAssignment] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmFreeId, setConfirmFreeId] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   const baseAssignment = assignments.find((a) => a.kind === 'base');
-  const loadedFeatureAssignments = assignments.filter((a) => a.loaded && a.kind !== 'base');
+  const loadedAssignments = assignments.filter((a) => a.loaded);
+  const loadedFeatureAssignments = loadedAssignments.filter((a) => a.kind !== 'base');
+
   const popupAssignmentData = assignments.find((a) => a.id === popupAssignment);
+  const confirmFreeData = assignments.find((a) => a.id === confirmFreeId);
 
   const updateAssignment = (id: string, updates: Partial<ModuleAssignment>) => {
     setAssignments((prev) => prev.map((a) => (a.id === id ? { ...a, ...updates } : a)));
@@ -34,10 +37,30 @@ export function TreeGraph({ user }: Props) {
     setPopupAssignment(null);
   };
 
-  const resetAllModules = () => {
-    setAssignments((prev) => prev.map((a) => (a.kind === 'base' ? a : { ...a, loaded: false })));
-    setPopupAssignment(null);
+  const resetApplication = () => {
+    setResetting(true);
+    setTimeout(() => {
+      setAssignments((prev) => prev.map((a) => (a.kind === 'base' ? a : { ...a, loaded: false })));
+      setResetting(false);
+      setConfirmReset(false);
+      setPopupAssignment(null);
+    }, 1200);
   };
+
+  // Layout: base at left-center, children arranged vertically to the right
+  const rootX = 110;
+  const rootY = H / 2;
+  const childX = 420;
+  const childSpacing = 60;
+  const childStartY = H / 2 - ((loadedFeatureAssignments.length - 1) * childSpacing) / 2;
+
+  const childPositions = useMemo(() => {
+    const map = new Map<string, { x: number; y: number }>();
+    loadedFeatureAssignments.forEach((a, i) => {
+      map.set(a.id, { x: childX, y: childStartY + i * childSpacing });
+    });
+    return map;
+  }, [loadedFeatureAssignments, childStartY]);
 
   return (
     <div className="flex flex-col h-full p-4 overflow-hidden">
@@ -50,11 +73,11 @@ export function TreeGraph({ user }: Props) {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={resetAllModules}
+            onClick={() => setConfirmReset(true)}
             className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/30 hover:bg-amber-500/20 transition-colors"
-            title="Free all non-base modules"
+            title="Reset the entire application (frees all non-base modules)"
           >
-            <RotateCcw className="w-3 h-3" />Reset All
+            <RotateCcw className="w-3 h-3" />Reset Application
           </button>
           <span className="inline-flex items-center gap-1 text-[10px] font-mono text-ink-faint px-2 py-0.5 rounded-md bg-white/5 ring-1 ring-border-subtle">
             {user.ip}
@@ -66,8 +89,8 @@ export function TreeGraph({ user }: Props) {
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
           <defs>
             <linearGradient id="mod-line" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#10B981" stopOpacity="0.7" />
-              <stop offset="100%" stopColor="#10B981" stopOpacity="0.2" />
+              <stop offset="0%" stopColor="#2563EB" stopOpacity="0.7" />
+              <stop offset="100%" stopColor="#10B981" stopOpacity="0.5" />
             </linearGradient>
             <filter id="glow">
               <feGaussianBlur stdDeviation="2.5" result="blur" />
@@ -75,15 +98,20 @@ export function TreeGraph({ user }: Props) {
             </filter>
           </defs>
 
-          {/* Module connections from base node to feature modules */}
-          {loadedFeatureAssignments.map((ma, i) => {
-            const my = moduleStartY + i * moduleSpacing;
-            const path = `M ${rootX + 34} ${rootY} L ${moduleNodeX - 20} ${my}`;
+          {/* Connections: parent -> child */}
+          {loadedFeatureAssignments.map((ma) => {
+            const pos = childPositions.get(ma.id);
+            if (!pos) return null;
+            const parent = assignments.find((a) => a.id === ma.parentId);
+            const parentIsBase = parent?.kind === 'base';
+            const px = parentIsBase ? rootX + 34 : (childPositions.get(ma.parentId)?.x ?? rootX) + 20;
+            const py = parentIsBase ? rootY : (childPositions.get(ma.parentId)?.y ?? rootY);
+            const path = `M ${px} ${py} L ${pos.x - 20} ${pos.y}`;
             return (
-              <g key={`modconn-${ma.id}`}>
+              <g key={`conn-${ma.id}`}>
                 <path d={path} fill="none" stroke="url(#mod-line)" strokeWidth={1.5} />
                 <circle r="2.5" fill="#10B981" opacity="0.8">
-                  <animateMotion dur={`${1.2 + i * 0.2}s`} repeatCount="indefinite" path={path} />
+                  <animateMotion dur={`${1.2 + Math.random() * 0.5}s`} repeatCount="indefinite" path={path} />
                 </circle>
               </g>
             );
@@ -112,19 +140,20 @@ export function TreeGraph({ user }: Props) {
           )}
 
           {/* Feature module nodes */}
-          {loadedFeatureAssignments.map((ma, i) => {
-            const my = moduleStartY + i * moduleSpacing;
+          {loadedFeatureAssignments.map((ma) => {
+            const pos = childPositions.get(ma.id);
+            if (!pos) return null;
             const mod = modules.find((m) => m.id === ma.moduleId);
             return (
-              <g key={`mod-${ma.id}`} className="cursor-pointer" onClick={() => setPopupAssignment(ma.id)}>
-                <circle cx={moduleNodeX} cy={my} r={20} fill="#0d1117" stroke="#10B981" strokeWidth="1.5" />
-                <rect x={moduleNodeX - 8} y={my - 7} width={16} height={14} rx={2} fill="none" stroke="#10B981" strokeWidth={1} />
-                <line x1={moduleNodeX - 5} y1={my - 3} x2={moduleNodeX + 5} y2={my - 3} stroke="#10B981" strokeWidth={0.8} />
-                <line x1={moduleNodeX - 5} y1={my} x2={moduleNodeX + 5} y2={my} stroke="#10B981" strokeWidth={0.8} />
-                <line x1={moduleNodeX - 5} y1={my + 3} x2={moduleNodeX + 5} y2={my + 3} stroke="#10B981" strokeWidth={0.8} />
-                <text x={moduleNodeX + 24} y={my - 2} fontSize="9.5" fill="#F9FAFB" fontWeight="500">{mod?.name ?? ma.moduleId}</text>
-                <text x={moduleNodeX + 24} y={my + 9} fontSize="8" fill="#6B7280">{ma.keyType.toUpperCase()}-K{ma.keyIndex + 1} · {ma.interval}s</text>
-                <circle cx={moduleNodeX + 16} cy={my + 14} r={3.5} fill="#10B981" stroke="#0d1117" strokeWidth="1.5" />
+              <g key={`node-${ma.id}`} className="cursor-pointer" onClick={() => setPopupAssignment(ma.id)}>
+                <circle cx={pos.x} cy={pos.y} r={20} fill="#0d1117" stroke="#10B981" strokeWidth="1.5" />
+                <rect x={pos.x - 8} y={pos.y - 7} width={16} height={14} rx={2} fill="none" stroke="#10B981" strokeWidth={1} />
+                <line x1={pos.x - 5} y1={pos.y - 3} x2={pos.x + 5} y2={pos.y - 3} stroke="#10B981" strokeWidth={0.8} />
+                <line x1={pos.x - 5} y1={pos.y} x2={pos.x + 5} y2={pos.y} stroke="#10B981" strokeWidth={0.8} />
+                <line x1={pos.x - 5} y1={pos.y + 3} x2={pos.x + 5} y2={pos.y + 3} stroke="#10B981" strokeWidth={0.8} />
+                <text x={pos.x + 24} y={pos.y - 2} fontSize="9.5" fill="#F9FAFB" fontWeight="500">{mod?.name ?? ma.moduleId}</text>
+                <text x={pos.x + 24} y={pos.y + 9} fontSize="8" fill="#6B7280">{ma.keyType.toUpperCase()}-K{ma.keyIndex + 1} · {ma.interval}s</text>
+                <circle cx={pos.x + 16} cy={pos.y + 14} r={3.5} fill="#10B981" stroke="#0d1117" strokeWidth="1.5" />
               </g>
             );
           })}
@@ -132,9 +161,9 @@ export function TreeGraph({ user }: Props) {
           {/* Legend */}
           <g>
             <circle cx={16} cy={H - 16} r={4} fill="#2563EB" />
-            <text x={24} y={H - 12} fontSize="8.5" fill="#6B7280">Base Module</text>
-            <circle cx={110} cy={H - 16} r={4} fill="#10B981" />
-            <text x={118} y={H - 12} fontSize="8.5" fill="#6B7280">Feature module loaded</text>
+            <text x={24} y={H - 12} fontSize="8.5" fill="#6B7280">Base Module (editable)</text>
+            <circle cx={150} cy={H - 16} r={4} fill="#10B981" />
+            <text x={158} y={H - 12} fontSize="8.5" fill="#6B7280">Loaded module</text>
           </g>
         </svg>
 
@@ -142,18 +171,43 @@ export function TreeGraph({ user }: Props) {
         {popupAssignmentData && (
           <ModulePopup
             assignment={popupAssignmentData}
+            assignments={assignments}
             onUpdate={(updates) => updateAssignment(popupAssignmentData.id, updates)}
-            onFree={() => freeModule(popupAssignmentData.id)}
+            onFree={() => setConfirmFreeId(popupAssignmentData.id)}
             onClose={() => setPopupAssignment(null)}
           />
         )}
       </div>
+
+      {/* Reset Application confirmation */}
+      <ConfirmDialog
+        open={confirmReset}
+        title="Reset Application"
+        message="This will free all loaded modules except the Base Information module. The application will return to its initial state. Do you confirm this action?"
+        confirmLabel="Reset Application"
+        variant="warning"
+        loading={resetting}
+        onConfirm={resetApplication}
+        onCancel={() => setConfirmReset(false)}
+      />
+
+      {/* Free module confirmation */}
+      <ConfirmDialog
+        open={!!confirmFreeId}
+        title="Free Module"
+        message={confirmFreeData ? `Are you sure you want to free the "${modules.find((m) => m.id === confirmFreeData.moduleId)?.name ?? confirmFreeData.moduleId}" module? Its tab will be locked again.` : ''}
+        confirmLabel="Free Module"
+        variant="danger"
+        onConfirm={() => confirmFreeId && freeModule(confirmFreeId)}
+        onCancel={() => setConfirmFreeId(null)}
+      />
     </div>
   );
 }
 
-function ModulePopup({ assignment, onUpdate, onFree, onClose }: {
+function ModulePopup({ assignment, assignments, onUpdate, onFree, onClose }: {
   assignment: ModuleAssignment;
+  assignments: ModuleAssignment[];
   onUpdate: (updates: Partial<ModuleAssignment>) => void;
   onFree: () => void;
   onClose: () => void;
@@ -199,6 +253,9 @@ function ModulePopup({ assignment, onUpdate, onFree, onClose }: {
     }, 1000);
   };
 
+  const parentAssignment = assignments.find((a) => a.id === assignment.parentId);
+  const parentMod = parentAssignment ? modules.find((m) => m.id === parentAssignment.moduleId) : null;
+
   return (
     <div className="absolute top-4 right-4 z-30 w-64 rounded-xl border border-border bg-bg-card shadow-[0_12px_48px_rgba(0,0,0,0.6)] p-4 animate-fade-in">
       <div className="flex items-center gap-2 mb-3">
@@ -219,6 +276,13 @@ function ModulePopup({ assignment, onUpdate, onFree, onClose }: {
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {!isBase && parentMod && (
+        <div className="mb-3 px-2 py-1.5 rounded-md bg-bg-base/50 ring-1 ring-border-subtle">
+          <p className="text-[9px] text-ink-faint uppercase tracking-wide">Parent Module</p>
+          <p className="text-[11px] text-ink-muted font-medium">{parentMod.name}</p>
+        </div>
+      )}
 
       <div className="space-y-3">
         <div>

@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { ArrowLeft, Network, ScrollText } from 'lucide-react';
-import type { SiteUser } from '@/types';
+import type { SiteUser, ModuleAssignment } from '@/types';
 import { TopBar } from '@/components/TopBar';
 import { PanelChrome, WorkspaceLayout, VerticalWorkspace } from '@/components/PanelChrome';
 import { TreeGraph } from '@/components/TreeGraph';
@@ -14,6 +15,8 @@ type Props = {
 };
 
 export function UserPage({ user, onBack, onFriendClick }: Props) {
+  const [assignments, setAssignments] = useState<ModuleAssignment[]>(user.moduleAssignments);
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Back bar */}
@@ -37,7 +40,12 @@ export function UserPage({ user, onBack, onFriendClick }: Props) {
             <WorkspaceLayout
               left={
                 <PanelChrome title="User Activity" icon={<Network className="w-4 h-4" />} className="h-full">
-                  <TreeGraph user={user} onFriendClick={onFriendClick} />
+                  <TreeGraph
+                    user={user}
+                    assignments={assignments}
+                    setAssignments={setAssignments}
+                    onFriendClick={onFriendClick}
+                  />
                 </PanelChrome>
               }
               right={
@@ -49,7 +57,7 @@ export function UserPage({ user, onBack, onFriendClick }: Props) {
           }
           bottom={
             <PanelChrome title="Details" className="h-full">
-              <InfoTabs user={user} />
+              <InfoTabs user={user} assignments={assignments} setAssignments={setAssignments} />
             </PanelChrome>
           }
         />

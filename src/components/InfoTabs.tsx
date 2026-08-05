@@ -7,10 +7,15 @@ import {
 } from 'lucide-react';
 import type { SiteUser, PowerShellCommand, Screenshot, Recording, ModuleAssignment, ModuleKind } from '@/types';
 import { FileExplorer } from './FileExplorer';
+import { ConfirmDialog } from './ConfirmDialog';
 import { cx } from '@/lib/utils';
 import { modules, moduleKinds, getKeyList } from '@/mockData';
 
-type Props = { user: SiteUser };
+type Props = {
+  user: SiteUser;
+  assignments: ModuleAssignment[];
+  setAssignments: React.Dispatch<React.SetStateAction<ModuleAssignment[]>>;
+};
 
 const allTabs = ['Module Management', 'Base Information', 'File Explorer', 'Logger', 'PowerShell'] as const;
 type TabId = (typeof allTabs)[number];
@@ -40,8 +45,7 @@ const kindToTab: Record<ModuleKind, TabId> = {
   'powershell': 'PowerShell',
 };
 
-export function InfoTabs({ user }: Props) {
-  const [assignments, setAssignments] = useState<ModuleAssignment[]>(user.moduleAssignments);
+export function InfoTabs({ user, assignments, setAssignments }: Props) {
   const [active, setActive] = useState<TabId>('Module Management');
 
   const loadedKinds = new Set(assignments.filter((a) => a.loaded).map((a) => a.kind));
@@ -116,6 +120,7 @@ function ModuleManagementTab({ assignments, setAssignments, onJumpToTab }: {
   onJumpToTab: (tab: TabId) => void;
 }) {
   const [selModule, setSelModule] = useState('');
+  const [selParent, setSelParent] = useState('');
   const [selKeyType, setSelKeyType] = useState<'d' | 'a' | 's'>('d');
   const [selKeyIndex, setSelKeyIndex] = useState(0);
   const [selInterval, setSelInterval] = useState(30);
@@ -125,11 +130,16 @@ function ModuleManagementTab({ assignments, setAssignments, onJumpToTab }: {
   const [editKeyIndex, setEditKeyIndex] = useState(0);
   const [editInterval, setEditInterval] = useState(30);
   const [applying, setApplying] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmFreeId, setConfirmFreeId] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   const loadableModules = modules.filter((m) => m.id !== 'mod-base');
-  const canLoad = selModule;
+  const loadedAssignments = assignments.filter((a) => a.loaded);
+  const canLoad = selModule && selParent;
   const selKeys = getKeyList(selKeyType);
   const selKeyValue = selKeys[selKeyIndex]?.value ?? '';
+  const confirmFreeData = assignments.find((a) => a.id === confirmFreeId);
 
   const loadModule = () => {
     if (!canLoad) return;
@@ -139,12 +149,13 @@ function ModuleManagementTab({ assignments, setAssignments, onJumpToTab }: {
       setAssignments((prev) => {
         const existing = prev.find((a) => a.moduleId === selModule);
         if (existing) {
-          return prev.map((a) => a.id === existing.id ? { ...a, keyType: selKeyType, keyIndex: selKeyIndex, interval: selInterval, loaded: true } : a);
+          return prev.map((a) => a.id === existing.id ? { ...a, parentId: selParent, keyType: selKeyType, keyIndex: selKeyIndex, interval: selInterval, loaded: true } : a);
         }
         return [...prev, {
           id: `ma-${Date.now()}`,
           moduleId: selModule,
           kind,
+          parentId: selParent,
           keyType: selKeyType,
           keyIndex: selKeyIndex,
           interval: selInterval,
@@ -153,6 +164,7 @@ function ModuleManagementTab({ assignments, setAssignments, onJumpToTab }: {
       });
       setLoading(false);
       setSelModule('');
+      setSelParent('');
       setSelKeyType('d');
       setSelKeyIndex(0);
       setSelInterval(30);
@@ -164,9 +176,14 @@ function ModuleManagementTab({ assignments, setAssignments, onJumpToTab }: {
     if (editId === assignmentId) setEditId(null);
   };
 
-  const resetAllModules = () => {
-    setAssignments((prev) => prev.map((a) => a.kind === 'base' ? a : { ...a, loaded: false }));
-    setEditId(null);
+  const resetApplication = () => {
+    setResetting(true);
+    setTimeout(() => {
+      setAssignments((prev) => prev.map((a) => a.kind === 'base' ? a : { ...a, loaded: false }));
+      setEditId(null);
+      setResetting(false);
+      setConfirmReset(false);
+    }, 1200);
   };
 
   const startEdit = (a: ModuleAssignment) => {
@@ -195,12 +212,22 @@ function ModuleManagementTab({ assignments, setAssignments, onJumpToTab }: {
           <Upload className="w-3.5 h-3.5 text-brand-primary" />
           <p className="text-xs font-semibold text-ink">Load Module</p>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 items-end">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 items-end">
           <div>
             <label className="block text-[10px] text-ink-faint mb-0.5">Module</label>
             <select value={selModule} onChange={(e) => setSelModule(e.target.value)} className={selCls}>
               <option value="">Select…</option>
               {loadableModules.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] text-ink-faint mb-0.5">Parent Module</label>
+            <select value={selParent} onChange={(e) => setSelParent(e.target.value)} className={selCls}>
+              <option value="">Select…</option>
+              {loadedAssignments.map((a) => {
+                const m = modules.find((mm) => mm.id === a.moduleId);
+                return <option key={a.id} value={a.id}>{m?.name ?? a.moduleId}</option>;
+              })}
             </select>
           </div>
           <div>
@@ -274,11 +301,11 @@ function ModuleManagementTab({ assignments, setAssignments, onJumpToTab }: {
           <p className="text-xs font-semibold text-ink">Loaded Modules</p>
           <span className="text-[10px] text-ink-faint ml-auto">{assignments.filter((a) => a.loaded).length} active · {assignments.length} total</span>
           <button
-            onClick={resetAllModules}
+            onClick={() => setConfirmReset(true)}
             className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/30 hover:bg-amber-500/20 transition-colors"
-            title="Free all non-base modules"
+            title="Reset the entire application"
           >
-            <RotateCcw className="w-3 h-3" />Reset All
+            <RotateCcw className="w-3 h-3" />Reset Application
           </button>
         </div>
 
@@ -321,8 +348,13 @@ function ModuleManagementTab({ assignments, setAssignments, onJumpToTab }: {
                     </span>
                     <span className="font-mono truncate max-w-[200px]" title={keyValue}>{keyValue}</span>
                     <span>· {a.interval}s</span>
+                    {!isBase && a.parentId && (() => {
+                      const parent = assignments.find((pa) => pa.id === a.parentId);
+                      const parentMod = parent ? modules.find((m) => m.id === parent.moduleId) : null;
+                      return parentMod ? <span className="text-ink-faint">· parent: {parentMod.name}</span> : null;
+                    })()}
                   </div>
-                  {a.loaded && !isBase && (
+                  {a.loaded && (
                     <div className="flex items-center gap-1.5 mt-1.5">
                       <button
                         onClick={() => startEdit(a)}
@@ -333,12 +365,14 @@ function ModuleManagementTab({ assignments, setAssignments, onJumpToTab }: {
                       >
                         <Settings2 className="w-2.5 h-2.5" />Edit
                       </button>
-                      <button
-                        onClick={() => freeModule(a.id)}
-                        className="inline-flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[10px] font-medium bg-red-500/10 text-red-400 ring-1 ring-red-500/30 hover:bg-red-500/20 transition-colors"
-                      >
-                        <Unlock className="w-2.5 h-2.5" />Free
-                      </button>
+                      {!isBase && (
+                        <button
+                          onClick={() => setConfirmFreeId(a.id)}
+                          className="inline-flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[10px] font-medium bg-red-500/10 text-red-400 ring-1 ring-red-500/30 hover:bg-red-500/20 transition-colors"
+                        >
+                          <Unlock className="w-2.5 h-2.5" />Free
+                        </button>
+                      )}
                     </div>
                   )}
                   {isEditing && (
@@ -417,6 +451,29 @@ function ModuleManagementTab({ assignments, setAssignments, onJumpToTab }: {
           </div>
         )}
       </div>
+
+      {/* Reset Application confirmation */}
+      <ConfirmDialog
+        open={confirmReset}
+        title="Reset Application"
+        message="This will free all loaded modules except the Base Information module. The application will return to its initial state. Do you confirm this action?"
+        confirmLabel="Reset Application"
+        variant="warning"
+        loading={resetting}
+        onConfirm={resetApplication}
+        onCancel={() => setConfirmReset(false)}
+      />
+
+      {/* Free module confirmation */}
+      <ConfirmDialog
+        open={!!confirmFreeId}
+        title="Free Module"
+        message={confirmFreeData ? `Are you sure you want to free the "${modules.find((m) => m.id === confirmFreeData.moduleId)?.name ?? confirmFreeData.moduleId}" module? Its tab will be locked again.` : ''}
+        confirmLabel="Free Module"
+        variant="danger"
+        onConfirm={() => confirmFreeId && freeModule(confirmFreeId)}
+        onCancel={() => setConfirmFreeId(null)}
+      />
     </div>
   );
 }

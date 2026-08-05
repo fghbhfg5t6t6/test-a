@@ -109,6 +109,7 @@ export type ModuleAssignment = {
   id: string;
   moduleId: string;
   kind: ModuleKind;
+  parentId: string;
   keyType: 'd' | 'a' | 's';
   keyIndex: number;
   interval: number;

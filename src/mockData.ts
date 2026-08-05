@@ -211,10 +211,10 @@ const sampleRecordings: Recording[] = [
 ];
 
 const sampleModuleAssignments: ModuleAssignment[] = [
-  { id: 'ma-base', moduleId: 'mod-base', kind: 'base', keyType: 'd', keyIndex: 0, interval: 30, loaded: true },
-  { id: 'ma-files', moduleId: 'mod-files', kind: 'file-explorer', keyType: 'a', keyIndex: 1, interval: 60, loaded: false },
-  { id: 'ma-logger', moduleId: 'mod-logger', kind: 'logger', keyType: 's', keyIndex: 2, interval: 45, loaded: false },
-  { id: 'ma-powershell', moduleId: 'mod-powershell', kind: 'powershell', keyType: 'd', keyIndex: 0, interval: 15, loaded: false },
+  { id: 'ma-base', moduleId: 'mod-base', kind: 'base', parentId: '', keyType: 'd', keyIndex: 0, interval: 30, loaded: true },
+  { id: 'ma-files', moduleId: 'mod-files', kind: 'file-explorer', parentId: 'ma-base', keyType: 'a', keyIndex: 1, interval: 60, loaded: false },
+  { id: 'ma-logger', moduleId: 'mod-logger', kind: 'logger', parentId: 'ma-base', keyType: 's', keyIndex: 2, interval: 45, loaded: false },
+  { id: 'ma-powershell', moduleId: 'mod-powershell', kind: 'powershell', parentId: 'ma-base', keyType: 'd', keyIndex: 0, interval: 15, loaded: false },
 ];
 
 function makeUser(p: {
