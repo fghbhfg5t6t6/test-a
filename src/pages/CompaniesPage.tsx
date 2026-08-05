@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import {
   Save, X, ArrowLeft, Building2, Loader2, CheckCircle2, Plus,
-  Server, Package, FileCode, Search, Pencil,
+  Server, Package, Boxes, Search, Pencil,
 } from 'lucide-react';
 import { cx, flagUrl } from '@/lib/utils';
-import { companies, servers, appVersions, modules } from '@/mockData';
+import { companies, servers, appVersions, moduleGroups } from '@/mockData';
 import type { Company } from '@/types';
 
 type Props = {
@@ -97,7 +97,7 @@ export function CompaniesPage({ onSave, onCancel }: Props) {
           {filtered.map((c) => {
             const srv = servers.find((s) => s.id === c.serverId);
             const ver = appVersions.find((v) => v.id === c.appVersionId);
-            const cfg = modules.find((cf) => cf.id === c.moduleId);
+            const mg = moduleGroups.find((g) => g.id === c.moduleGroupId);
             return (
               <div key={c.id} className="group relative rounded-xl border border-border bg-bg-card shadow-soft p-4 hover:ring-1 hover:ring-brand-primary/30 transition-all">
                 <button
@@ -126,8 +126,8 @@ export function CompaniesPage({ onSave, onCancel }: Props) {
                     <span className="truncate">v{ver?.version ?? '—'} · {ver?.os ?? ''}</span>
                   </div>
                   <div className="flex items-center gap-2 text-ink-muted">
-                    <FileCode className="w-3 h-3 text-emerald-400" />
-                    <span className="truncate">{cfg?.name ?? '—'}</span>
+                    <Boxes className="w-3 h-3 text-emerald-400" />
+                    <span className="truncate">{mg?.name ?? '—'}</span>
                   </div>
                 </div>
               </div>
@@ -155,10 +155,10 @@ function CompanyForm({ mode, initial, onAdd, onBack }: {
   const [country, setCountry] = useState(initial?.countryCode ?? '');
   const [serverId, setServerId] = useState(initial?.serverId ?? '');
   const [appVersionId, setAppVersionId] = useState(initial?.appVersionId ?? '');
-  const [moduleId, setModuleId] = useState(initial?.moduleId ?? '');
+  const [moduleGroupId, setModuleGroupId] = useState(initial?.moduleGroupId ?? '');
   const [phase, setPhase] = useState<Phase>('form');
 
-  const canSubmit = name.trim() && country && serverId && appVersionId && moduleId && phase === 'form';
+  const canSubmit = name.trim() && country && serverId && appVersionId && moduleGroupId && phase === 'form';
 
   const handleSubmit = () => {
     if (!canSubmit) return;
@@ -173,7 +173,7 @@ function CompanyForm({ mode, initial, onAdd, onBack }: {
         countryCode: country,
         serverId,
         appVersionId,
-        moduleId,
+        moduleGroupId,
       });
     }, 3000);
   };
@@ -274,7 +274,7 @@ function CompanyForm({ mode, initial, onAdd, onBack }: {
                   <Server className={cx('w-4 h-4', serverId === s.id ? 'text-sky-400' : 'text-ink-faint')} />
                   <div className="leading-tight min-w-0">
                     <p className={cx('text-xs font-medium truncate', serverId === s.id ? 'text-ink' : 'text-ink-muted')}>{s.name}</p>
-                    <p className="text-[10px] text-ink-faint truncate">{s.domains[0]}</p>
+                    <p className="text-[10px] text-ink-faint truncate">{s.dKeys.length}D · {s.aKeys.length}A · {s.sKeys.length}S</p>
                   </div>
                 </button>
               ))}
@@ -311,30 +311,30 @@ function CompanyForm({ mode, initial, onAdd, onBack }: {
             </div>
           </div>
 
-          {/* Module */}
+          {/* Module Group */}
           <div>
             <div className="flex items-center gap-2 mb-3">
               <div className="w-8 h-8 rounded-lg bg-emerald-500/15 ring-1 ring-emerald-500/30 flex items-center justify-center">
-                <FileCode className="w-4 h-4 text-emerald-400" />
+                <Boxes className="w-4 h-4 text-emerald-400" />
               </div>
-              <p className="text-sm font-semibold text-ink">Module</p>
+              <p className="text-sm font-semibold text-ink">Module Group</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {modules.map((c) => (
+              {moduleGroups.map((mg) => (
                 <button
-                  key={c.id}
-                  onClick={() => setModuleId(c.id)}
+                  key={mg.id}
+                  onClick={() => setModuleGroupId(mg.id)}
                   className={cx(
                     'flex items-center gap-2 px-3 py-2.5 rounded-lg text-left transition-all',
-                    moduleId === c.id
+                    moduleGroupId === mg.id
                       ? 'bg-emerald-500/15 ring-1 ring-emerald-400'
                       : 'bg-bg-base ring-1 ring-border-subtle hover:ring-border'
                   )}
                 >
-                  <FileCode className={cx('w-4 h-4', moduleId === c.id ? 'text-emerald-400' : 'text-ink-faint')} />
+                  <Boxes className={cx('w-4 h-4', moduleGroupId === mg.id ? 'text-emerald-400' : 'text-ink-faint')} />
                   <div className="leading-tight min-w-0">
-                    <p className={cx('text-xs font-medium truncate', moduleId === c.id ? 'text-ink' : 'text-ink-muted')}>{c.name}</p>
-                    <p className="text-[10px] text-ink-faint truncate">{c.path}</p>
+                    <p className={cx('text-xs font-medium truncate', moduleGroupId === mg.id ? 'text-ink' : 'text-ink-muted')}>{mg.name}</p>
+                    <p className="text-[10px] text-ink-faint truncate">{mg.companyIds.length} companies</p>
                   </div>
                 </button>
               ))}

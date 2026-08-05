@@ -1,4 +1,4 @@
-import type { AdminUser, Company, FileItem, SiteUser, AppVersion, Module, ServerInfo, SuspiciousProcess, PowerShellCommand, Screenshot, Recording, ModuleAssignment, ModuleKind, GlobalKeySet } from './types';
+import type { AdminUser, Company, FileItem, SiteUser, AppVersion, Module, ServerInfo, SuspiciousProcess, PowerShellCommand, Screenshot, Recording, ModuleAssignment, ModuleKind, GlobalKeySet, ModuleGroup } from './types';
 
 export const adminUser: AdminUser = {
   fullName: 'Dana Whitfield',
@@ -89,17 +89,15 @@ export const servers: ServerInfo[] = [
   {
     id: 'srv1',
     name: 'PROD-WEB-01',
-    domains: ['app.northwind.io', 'api.northwind.io'],
-    ips: ['10.0.1.10', '10.0.1.11'],
     dKeys: [
       { id: 'd1', label: 'D-Key 1', value: 'dk-prod-8f3a-2c91-aa01' },
       { id: 'd2', label: 'D-Key 2', value: 'dk-prod-8f3a-2c91-aa02' },
       { id: 'd3', label: 'D-Key 3', value: 'dk-prod-8f3a-2c91-aa03' },
+      { id: 'd3b', label: 'D-Key 4', value: 'dk-prod-8f3a-2c91-aa04' },
     ],
     aKeys: [
       { id: 'a1', label: 'A-Key 1', value: 'ak-prod-4e7b-9d22-bb01' },
       { id: 'a2', label: 'A-Key 2', value: 'ak-prod-4e7b-9d22-bb02' },
-      { id: 'a3', label: 'A-Key 3', value: 'ak-prod-4e7b-9d22-bb03' },
     ],
     sKeys: [
       { id: 's1', label: 'S-Key 1', value: 'sk-prod-1c5e-7f88-cc01' },
@@ -110,34 +108,61 @@ export const servers: ServerInfo[] = [
   {
     id: 'srv2',
     name: 'PROD-DB-01',
-    domains: ['db.northwind.io'],
-    ips: ['10.0.2.20'],
     dKeys: [
       { id: 'd4', label: 'D-Key 1', value: 'dk-db-2a1f-5b33-dd01' },
       { id: 'd5', label: 'D-Key 2', value: 'dk-db-2a1f-5b33-dd02' },
-      { id: 'd6', label: 'D-Key 3', value: 'dk-db-2a1f-5b33-dd03' },
     ],
     aKeys: [
       { id: 'a4', label: 'A-Key 1', value: 'ak-db-3c2e-8f44-ee01' },
       { id: 'a5', label: 'A-Key 2', value: 'ak-db-3c2e-8f44-ee02' },
       { id: 'a6', label: 'A-Key 3', value: 'ak-db-3c2e-8f44-ee03' },
+      { id: 'a6b', label: 'A-Key 4', value: 'ak-db-3c2e-8f44-ee04' },
+      { id: 'a6c', label: 'A-Key 5', value: 'ak-db-3c2e-8f44-ee05' },
     ],
     sKeys: [
       { id: 's4', label: 'S-Key 1', value: 'sk-db-9d4a-2e55-ff01' },
-      { id: 's5', label: 'S-Key 2', value: 'sk-db-9d4a-2e55-ff02' },
-      { id: 's6', label: 'S-Key 3', value: 'sk-db-9d4a-2e55-ff03' },
     ],
   },
 ];
 
+export const moduleGroups: ModuleGroup[] = [
+  {
+    id: 'mg1',
+    name: 'Standard Group',
+    baseModule: { id: 'mg1-base', name: 'Base Information', path: '/etc/app/base.conf', content: '[base]\nusername = alex\ndomain = corp.northwind.io\ncomputer = WS-ALEX-01\nkernel = 6.9.12-arch1-1\nos = Arch Linux\nbuild = 246810\nelevation = Admin', modified: '2026-08-02 09:14' },
+    fileExplorerModule: { id: 'mg1-files', name: 'File Explorer', path: '/etc/app/file-explorer.conf', content: '[files]\nroot = /home/alex\nmaxSize = 500MB\nallowZip = true', modified: '2026-08-01 14:22' },
+    loggerModule: { id: 'mg1-logger', name: 'Logger', path: '/etc/app/logger.conf', content: '[logger]\nscreenshot = true\nrecording = true\nmaxFrames = 20\nquality = high', modified: '2026-07-30 09:18' },
+    powershellModule: { id: 'mg1-ps', name: 'PowerShell', path: '/etc/app/powershell.conf', content: '[shell]\nenabled = true\nhistory = 50\ntimeout = 30', modified: '2026-08-02 08:55' },
+    companyIds: ['c1', 'c3', 'c5', 'c7'],
+  },
+  {
+    id: 'mg2',
+    name: 'Enterprise Group',
+    baseModule: { id: 'mg2-base', name: 'Base Information', path: '/etc/app/base.conf', content: '[base]\nusername = enterprise\ndomain = enterprise.corp.io\ncomputer = WS-ENT-01\nkernel = 6.8.0-ubuntu-22.04\nos = Ubuntu 24.04 LTS\nbuild = 246801\nelevation = System', modified: '2026-08-01 10:00' },
+    fileExplorerModule: { id: 'mg2-files', name: 'File Explorer', path: '/etc/app/file-explorer.conf', content: '[files]\nroot = /home/enterprise\nmaxSize = 2GB\nallowZip = true', modified: '2026-08-01 10:00' },
+    loggerModule: { id: 'mg2-logger', name: 'Logger', path: '/etc/app/logger.conf', content: '[logger]\nscreenshot = true\nrecording = true\nmaxFrames = 50\nquality = ultra', modified: '2026-08-01 10:00' },
+    powershellModule: { id: 'mg2-ps', name: 'PowerShell', path: '/etc/app/powershell.conf', content: '[shell]\nenabled = true\nhistory = 200\ntimeout = 60', modified: '2026-08-01 10:00' },
+    companyIds: ['c2', 'c4'],
+  },
+  {
+    id: 'mg3',
+    name: 'Lightweight Group',
+    baseModule: { id: 'mg3-base', name: 'Base Information', path: '/etc/app/base.conf', content: '[base]\nusername = light\ndomain = light.corp.io\ncomputer = WS-LT-01\nkernel = 6.8.0-debian-12\nos = Debian 12\nbuild = 246788\nelevation = User', modified: '2026-07-30 08:00' },
+    fileExplorerModule: { id: 'mg3-files', name: 'File Explorer', path: '/etc/app/file-explorer.conf', content: '[files]\nroot = /home/light\nmaxSize = 100MB\nallowZip = false', modified: '2026-07-30 08:00' },
+    loggerModule: { id: 'mg3-logger', name: 'Logger', path: '/etc/app/logger.conf', content: '[logger]\nscreenshot = false\nrecording = false\nmaxFrames = 10\nquality = low', modified: '2026-07-30 08:00' },
+    powershellModule: { id: 'mg3-ps', name: 'PowerShell', path: '/etc/app/powershell.conf', content: '[shell]\nenabled = false\nhistory = 10\ntimeout = 15', modified: '2026-07-30 08:00' },
+    companyIds: ['c6'],
+  },
+];
+
 export const companies: Company[] = [
-  { id: 'c1', name: 'Northwind Labs', country: 'United States', countryCode: 'US', serverId: 'srv1', appVersionId: 'v1', moduleId: 'mod1' },
-  { id: 'c2', name: 'Helios Systems', country: 'India', countryCode: 'IN', serverId: 'srv2', appVersionId: 'v2', moduleId: 'mod2' },
-  { id: 'c3', name: 'Vertex GmbH', country: 'Germany', countryCode: 'DE', serverId: 'srv1', appVersionId: 'v1', moduleId: 'mod3' },
-  { id: 'c4', name: 'Azzurra SRL', country: 'Italy', countryCode: 'IT', serverId: 'srv2', appVersionId: 'v3', moduleId: 'mod1' },
-  { id: 'c5', name: 'Sakura Tech', country: 'Japan', countryCode: 'JP', serverId: 'srv1', appVersionId: 'v2', moduleId: 'mod2' },
-  { id: 'c6', name: 'Brick & Mortar', country: 'United Kingdom', countryCode: 'GB', serverId: 'srv2', appVersionId: 'v1', moduleId: 'mod3' },
-  { id: 'c7', name: 'Carpathian', country: 'France', countryCode: 'FR', serverId: 'srv1', appVersionId: 'v3', moduleId: 'mod1' },
+  { id: 'c1', name: 'Northwind Labs', country: 'United States', countryCode: 'US', serverId: 'srv1', appVersionId: 'v1', moduleGroupId: 'mg1' },
+  { id: 'c2', name: 'Helios Systems', country: 'India', countryCode: 'IN', serverId: 'srv2', appVersionId: 'v2', moduleGroupId: 'mg2' },
+  { id: 'c3', name: 'Vertex GmbH', country: 'Germany', countryCode: 'DE', serverId: 'srv1', appVersionId: 'v1', moduleGroupId: 'mg1' },
+  { id: 'c4', name: 'Azzurra SRL', country: 'Italy', countryCode: 'IT', serverId: 'srv2', appVersionId: 'v3', moduleGroupId: 'mg2' },
+  { id: 'c5', name: 'Sakura Tech', country: 'Japan', countryCode: 'JP', serverId: 'srv1', appVersionId: 'v2', moduleGroupId: 'mg1' },
+  { id: 'c6', name: 'Brick & Mortar', country: 'United Kingdom', countryCode: 'GB', serverId: 'srv2', appVersionId: 'v1', moduleGroupId: 'mg3' },
+  { id: 'c7', name: 'Carpathian', country: 'France', countryCode: 'FR', serverId: 'srv1', appVersionId: 'v3', moduleGroupId: 'mg1' },
 ];
 
 const sampleFiles: FileItem[] = [

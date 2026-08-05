@@ -172,8 +172,19 @@ function ModuleManagementTab({ assignments, setAssignments, onJumpToTab }: {
   };
 
   const freeModule = (assignmentId: string) => {
-    setAssignments((prev) => prev.map((a) => a.id === assignmentId ? { ...a, loaded: false } : a));
-    if (editId === assignmentId) setEditId(null);
+    const idsToFree = new Set<string>([assignmentId]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      assignments.forEach((a) => {
+        if (a.parentId && idsToFree.has(a.parentId) && !idsToFree.has(a.id)) {
+          idsToFree.add(a.id);
+          changed = true;
+        }
+      });
+    }
+    setAssignments((prev) => prev.map((a) => (idsToFree.has(a.id) ? { ...a, loaded: false } : a)));
+    if (editId && idsToFree.has(editId)) setEditId(null);
   };
 
   const resetApplication = () => {
@@ -468,7 +479,11 @@ function ModuleManagementTab({ assignments, setAssignments, onJumpToTab }: {
       <ConfirmDialog
         open={!!confirmFreeId}
         title="Free Module"
-        message={confirmFreeData ? `Are you sure you want to free the "${modules.find((m) => m.id === confirmFreeData.moduleId)?.name ?? confirmFreeData.moduleId}" module? Its tab will be locked again.` : ''}
+        message={confirmFreeData ? (() => {
+          const childCount = assignments.filter((a) => a.parentId === confirmFreeData.id && a.loaded).length;
+          const base = `Are you sure you want to free the "${modules.find((m) => m.id === confirmFreeData.moduleId)?.name ?? confirmFreeData.moduleId}" module?`;
+          return childCount > 0 ? `${base} This will also free ${childCount} child module${childCount > 1 ? 's' : ''} attached to it.` : `${base} Its tab will be locked again.`;
+        })() : ''}
         confirmLabel="Free Module"
         variant="danger"
         onConfirm={() => confirmFreeId && freeModule(confirmFreeId)}

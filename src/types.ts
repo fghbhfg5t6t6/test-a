@@ -128,6 +128,16 @@ export type GlobalKeySet = {
   sKeys: GlobalKey[];
 };
 
+export type ModuleGroup = {
+  id: string;
+  name: string;
+  baseModule: Module;
+  fileExplorerModule: Module;
+  loggerModule: Module;
+  powershellModule: Module;
+  companyIds: string[];
+};
+
 export type SiteUser = {
   id: string;
   fullName: string;
@@ -160,7 +170,7 @@ export type Company = {
   countryCode: string;
   serverId: string;
   appVersionId: string;
-  moduleId: string;
+  moduleGroupId: string;
 };
 
 export type AdminUser = {
@@ -189,8 +199,6 @@ export type ServerKey = {
 export type ServerInfo = {
   id: string;
   name: string;
-  domains: string[];
-  ips: string[];
   dKeys: ServerKey[];
   aKeys: ServerKey[];
   sKeys: ServerKey[];

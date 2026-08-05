@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { X, Key, Unlock, Zap, FileCode, Check, Loader2, RotateCcw, ShieldAlert } from 'lucide-react';
+import { X, Key, Unlock, Zap, FileCode, Check, Loader2, RotateCcw } from 'lucide-react';
 import type { SiteUser, ModuleAssignment } from '@/types';
 import { modules, getKeyList } from '@/mockData';
 import { cx } from '@/lib/utils';
@@ -33,7 +33,19 @@ export function TreeGraph({ user, assignments, setAssignments }: Props) {
   };
 
   const freeModule = (id: string) => {
-    setAssignments((prev) => prev.map((a) => (a.id === id ? { ...a, loaded: false } : a)));
+    // Recursive free: free this module and all its descendants
+    const idsToFree = new Set<string>([id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      assignments.forEach((a) => {
+        if (a.parentId && idsToFree.has(a.parentId) && !idsToFree.has(a.id)) {
+          idsToFree.add(a.id);
+          changed = true;
+        }
+      });
+    }
+    setAssignments((prev) => prev.map((a) => (idsToFree.has(a.id) ? { ...a, loaded: false } : a)));
     setPopupAssignment(null);
   };
 
@@ -79,9 +91,7 @@ export function TreeGraph({ user, assignments, setAssignments }: Props) {
           >
             <RotateCcw className="w-3 h-3" />Reset Application
           </button>
-          <span className="inline-flex items-center gap-1 text-[10px] font-mono text-ink-faint px-2 py-0.5 rounded-md bg-white/5 ring-1 ring-border-subtle">
-            {user.ip}
-          </span>
+
         </div>
       </div>
 
@@ -106,12 +116,11 @@ export function TreeGraph({ user, assignments, setAssignments }: Props) {
             const parentIsBase = parent?.kind === 'base';
             const px = parentIsBase ? rootX + 34 : (childPositions.get(ma.parentId)?.x ?? rootX) + 20;
             const py = parentIsBase ? rootY : (childPositions.get(ma.parentId)?.y ?? rootY);
-            const path = `M ${px} ${py} L ${pos.x - 20} ${pos.y}`;
             return (
               <g key={`conn-${ma.id}`}>
-                <path d={path} fill="none" stroke="url(#mod-line)" strokeWidth={1.5} />
-                <circle r="2.5" fill="#10B981" opacity="0.8">
-                  <animateMotion dur={`${1.2 + Math.random() * 0.5}s`} repeatCount="indefinite" path={path} />
+                <line x1={px} y1={py} x2={pos.x - 20} y2={pos.y} stroke="#10B981" strokeWidth={1.5} opacity={0.6} />
+                <circle r="2.5" fill="#10B981" opacity={0.8}>
+                  <animateMotion dur={`${1.2 + Math.random() * 0.5}s`} repeatCount="indefinite" path={`M ${px} ${py} L ${pos.x - 20} ${pos.y}`} />
                 </circle>
               </g>
             );
@@ -195,7 +204,11 @@ export function TreeGraph({ user, assignments, setAssignments }: Props) {
       <ConfirmDialog
         open={!!confirmFreeId}
         title="Free Module"
-        message={confirmFreeData ? `Are you sure you want to free the "${modules.find((m) => m.id === confirmFreeData.moduleId)?.name ?? confirmFreeData.moduleId}" module? Its tab will be locked again.` : ''}
+        message={confirmFreeData ? (() => {
+          const childCount = assignments.filter((a) => a.parentId === confirmFreeData.id && a.loaded).length;
+          const base = `Are you sure you want to free the "${modules.find((m) => m.id === confirmFreeData.moduleId)?.name ?? confirmFreeData.moduleId}" module?`;
+          return childCount > 0 ? `${base} This will also free ${childCount} child module${childCount > 1 ? 's' : ''} attached to it.` : `${base} Its tab will be locked again.`;
+        })() : ''}
         confirmLabel="Free Module"
         variant="danger"
         onConfirm={() => confirmFreeId && freeModule(confirmFreeId)}

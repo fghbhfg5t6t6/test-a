@@ -1,18 +1,19 @@
 import { useState } from 'react';
 import {
   Save, Building2, Package, FileCode, Server, Users,
-  Plus, Pencil, Trash2, X, Upload, Globe, Key, ChevronRight, Loader2, Check,
+  Plus, Pencil, Trash2, X, Upload, Key, ChevronRight, Loader2, Check,
+  Boxes, FolderOpen, Camera, Terminal, Layers,
 } from 'lucide-react';
 import { cx } from '@/lib/utils';
-import { adminUsers, companies, appVersions, modules, servers } from '@/mockData';
-import type { AppVersion, Module, ServerInfo, ServerKey } from '@/types';
+import { adminUsers, companies, appVersions, servers, moduleGroups } from '@/mockData';
+import type { AppVersion, Module, ServerInfo, ServerKey, ModuleGroup } from '@/types';
 
 type Props = { onBack: () => void };
 
 const sections = [
   { id: 'access', label: 'Admin Access', icon: Users },
   { id: 'versions', label: 'App Versions', icon: Package },
-  { id: 'configs', label: 'Modules', icon: FileCode },
+  { id: 'moduleGroups', label: 'Module Groups', icon: Boxes },
   { id: 'servers', label: 'Servers', icon: Server },
 ] as const;
 
@@ -26,7 +27,7 @@ export function SettingsPage({ onBack }: Props) {
       <div className="flex items-center gap-3 px-4 lg:px-6 py-4 border-b border-border">
         <div>
           <h1 className="text-base font-semibold text-ink">Dashboard Settings</h1>
-          <p className="text-[11px] text-ink-muted">Manage access, versions, configs, and servers</p>
+          <p className="text-[11px] text-ink-muted">Manage access, versions, module groups, and servers</p>
         </div>
         <button
           onClick={onBack}
@@ -61,7 +62,7 @@ export function SettingsPage({ onBack }: Props) {
           <div className="max-w-3xl space-y-6">
             {active === 'access' && <AdminAccessSection />}
             {active === 'versions' && <AppVersionsSection />}
-            {active === 'configs' && <ModulesSection />}
+            {active === 'moduleGroups' && <ModuleGroupsSection />}
             {active === 'servers' && <ServersSection />}
           </div>
         </div>
@@ -231,107 +232,199 @@ function AppVersionsSection() {
   );
 }
 
-function ModulesSection() {
-  const [mods, setMods] = useState<Module[]>(modules);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
-  const [newCfg, setNewCfg] = useState({ name: '', path: '', content: '' });
-  const [editContent, setEditContent] = useState('');
+const moduleSlotIcons = {
+  base: FileCode,
+  'file-explorer': FolderOpen,
+  logger: Camera,
+  powershell: Terminal,
+} as const;
 
-  const addConfig = () => {
-    if (!newCfg.name) return;
-    setMods((prev) => [...prev, {
-      id: `cfg${Date.now()}`,
-      name: newCfg.name,
-      path: newCfg.path || `/etc/app/${newCfg.name}`,
-      content: newCfg.content,
-      modified: new Date().toLocaleString('sv-SE').replace('T', ' ').slice(0, 16),
+const moduleSlotLabels = {
+  base: 'Base Information',
+  'file-explorer': 'File Explorer',
+  logger: 'Logger',
+  powershell: 'PowerShell',
+} as const;
+
+function ModuleGroupsSection() {
+  const [groups, setGroups] = useState<ModuleGroup[]>(moduleGroups);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newGroup, setNewGroup] = useState({ name: '' });
+  const [editGroupId, setEditGroupId] = useState<string | null>(null);
+  const [editSlot, setEditSlot] = useState<'base' | 'file-explorer' | 'logger' | 'powershell' | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const [editName, setEditName] = useState('');
+
+  const addGroup = () => {
+    if (!newGroup.name) return;
+    const id = `mg${Date.now()}`;
+    const now = new Date().toLocaleString('sv-SE').replace('T', ' ').slice(0, 16);
+    setGroups((prev) => [...prev, {
+      id,
+      name: newGroup.name,
+      baseModule: { id: `${id}-base`, name: 'Base Information', path: '/etc/app/base.conf', content: '[base]\nusername = user\ndomain = corp.io\ncomputer = WS-01\nkernel = 6.8.0\nos = Linux\nbuild = 246788\nelevation = User', modified: now },
+      fileExplorerModule: { id: `${id}-files`, name: 'File Explorer', path: '/etc/app/file-explorer.conf', content: '[files]\nroot = /home/user\nmaxSize = 500MB\nallowZip = true', modified: now },
+      loggerModule: { id: `${id}-logger`, name: 'Logger', path: '/etc/app/logger.conf', content: '[logger]\nscreenshot = true\nrecording = true\nmaxFrames = 20\nquality = high', modified: now },
+      powershellModule: { id: `${id}-ps`, name: 'PowerShell', path: '/etc/app/powershell.conf', content: '[shell]\nenabled = true\nhistory = 50\ntimeout = 30', modified: now },
+      companyIds: [],
     }]);
-    setNewCfg({ name: '', path: '', content: '' });
+    setNewGroup({ name: '' });
     setShowAdd(false);
   };
 
-  const saveEdit = (id: string) => {
-    setMods((prev) => prev.map((c) => c.id === id ? { ...c, content: editContent, modified: new Date().toLocaleString('sv-SE').replace('T', ' ').slice(0, 16) } : c));
-    setEditId(null);
+  const deleteGroup = (id: string) => setGroups((prev) => prev.filter((g) => g.id !== id));
+
+  const startEditSlot = (groupId: string, slot: 'base' | 'file-explorer' | 'logger' | 'powershell') => {
+    const group = groups.find((g) => g.id === groupId);
+    if (!group) return;
+    const mod = slot === 'base' ? group.baseModule : slot === 'file-explorer' ? group.fileExplorerModule : slot === 'logger' ? group.loggerModule : group.powershellModule;
+    setEditGroupId(groupId);
+    setEditSlot(slot);
+    setEditContent(mod.content);
+    setEditName(mod.name);
   };
 
-  const deleteConfig = (id: string) => setMods((prev) => prev.filter((c) => c.id !== id));
+  const saveSlot = () => {
+    if (!editGroupId || !editSlot) return;
+    const now = new Date().toLocaleString('sv-SE').replace('T', ' ').slice(0, 16);
+    setGroups((prev) => prev.map((g) => {
+      if (g.id !== editGroupId) return g;
+      const updatedMod = { ...(editSlot === 'base' ? g.baseModule : editSlot === 'file-explorer' ? g.fileExplorerModule : editSlot === 'logger' ? g.loggerModule : g.powershellModule), content: editContent, name: editName, modified: now };
+      if (editSlot === 'base') return { ...g, baseModule: updatedMod };
+      if (editSlot === 'file-explorer') return { ...g, fileExplorerModule: updatedMod };
+      if (editSlot === 'logger') return { ...g, loggerModule: updatedMod };
+      return { ...g, powershellModule: updatedMod };
+    }));
+    setEditGroupId(null);
+    setEditSlot(null);
+  };
+
+  const toggleCompany = (groupId: string, companyId: string) => {
+    setGroups((prev) => prev.map((g) => {
+      if (g.id !== groupId) return g;
+      const has = g.companyIds.includes(companyId);
+      return { ...g, companyIds: has ? g.companyIds.filter((c) => c !== companyId) : [...g.companyIds, companyId] };
+    }));
+  };
+
+  const slots: ('base' | 'file-explorer' | 'logger' | 'powershell')[] = ['base', 'file-explorer', 'logger', 'powershell'];
 
   return (
-    <SectionCard title="Modules" desc="View, edit, add, or remove modules.">
+    <SectionCard title="Module Groups" desc="Each group contains its own Base Information, File Explorer, Logger, and PowerShell modules. Assign groups to companies.">
       <button
         onClick={() => setShowAdd((s) => !s)}
         className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-brand-primary/10 text-brand-primary ring-1 ring-brand-primary/30 hover:bg-brand-primary/20 transition-all mb-4"
       >
-        <Plus className="w-3.5 h-3.5" />Add Module
+        <Plus className="w-3.5 h-3.5" />Add Module Group
       </button>
 
       {showAdd && (
-        <div className="rounded-lg ring-1 ring-brand-primary/20 bg-brand-primary/5 p-4 mb-4 animate-fade-in space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <LabeledInput label="File Name" value={newCfg.name} onChange={(v) => setNewCfg({ ...newCfg, name: v })} placeholder="app.conf" />
-            <LabeledInput label="File Path" value={newCfg.path} onChange={(v) => setNewCfg({ ...newCfg, path: v })} placeholder="/etc/app/app.conf" />
-          </div>
-          <div>
-            <label className="block text-[11px] font-medium text-ink-muted mb-1.5">Content</label>
-            <textarea
-              value={newCfg.content}
-              onChange={(e) => setNewCfg({ ...newCfg, content: e.target.value })}
-              placeholder="[server]\nport = 8443"
-              rows={4}
-              className="w-full px-3 py-2 rounded-lg bg-bg-base border border-border text-sm text-ink font-mono placeholder:text-ink-faint focus:outline-none focus:border-brand-primary/60 resize-y"
-            />
-          </div>
-          <div className="flex justify-end gap-2">
+        <div className="rounded-lg ring-1 ring-brand-primary/20 bg-brand-primary/5 p-4 mb-4 animate-fade-in">
+          <LabeledInput label="Group Name" value={newGroup.name} onChange={(v) => setNewGroup({ ...newGroup, name: v })} placeholder="e.g. Premium Group" />
+          <div className="flex justify-end gap-2 mt-3">
             <button onClick={() => setShowAdd(false)} className="px-3 py-2 rounded-lg text-xs font-medium text-ink-muted hover:text-ink bg-white/5 transition-colors">Cancel</button>
-            <button onClick={addConfig} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-brand-primary text-white hover:bg-blue-600 transition-colors">
-              <Save className="w-3.5 h-3.5" />Add Module
+            <button onClick={addGroup} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-brand-primary text-white hover:bg-blue-600 transition-colors">
+              <Save className="w-3.5 h-3.5" />Add Group
             </button>
           </div>
         </div>
       )}
 
-      <div className="space-y-2">
-        {mods.map((c) => (
-          <div key={c.id} className="rounded-lg bg-bg-base/50 ring-1 ring-border-subtle overflow-hidden">
+      <div className="space-y-3">
+        {groups.map((g) => (
+          <div key={g.id} className="rounded-xl ring-1 ring-border-subtle bg-bg-base/50 overflow-hidden">
             <div className="flex items-center gap-3 px-3 py-2.5">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/15 ring-1 ring-emerald-500/30 flex items-center justify-center flex-shrink-0">
-                <FileCode className="w-4 h-4 text-emerald-400" />
+              <div className="w-8 h-8 rounded-lg bg-brand-primary/15 ring-1 ring-brand-primary/30 flex items-center justify-center flex-shrink-0">
+                <Boxes className="w-4 h-4 text-brand-primary" />
               </div>
-              <div className="leading-tight min-w-0 flex-1">
-                <p className="text-xs font-semibold text-ink">{c.name}</p>
-                <p className="text-[10px] text-ink-muted font-mono truncate">{c.path}</p>
+              <div className="leading-tight flex-1 min-w-0">
+                <p className="text-xs font-semibold text-ink">{g.name}</p>
+                <p className="text-[10px] text-ink-muted">{g.companyIds.length} companies assigned</p>
               </div>
-              <span className="text-[10px] text-ink-faint hidden sm:block">{c.modified}</span>
-              <div className="flex items-center gap-0.5">
-                <button
-                  onClick={() => { setEditId(editId === c.id ? null : c.id); setEditContent(c.content); }}
-                  className="p-1.5 rounded-md text-ink-faint hover:text-brand-primary hover:bg-white/5 transition-colors"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => deleteConfig(c.id)} className="p-1.5 rounded-md text-ink-faint hover:text-red-400 hover:bg-white/5 transition-colors">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <button onClick={() => deleteGroup(g.id)} className="p-1.5 rounded-md text-ink-faint hover:text-red-400 hover:bg-white/5 transition-colors">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
             </div>
-            {editId === c.id && (
-              <div className="px-3 pb-3 pt-1 border-t border-border-subtle animate-fade-in">
-                <textarea
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  rows={6}
-                  className="w-full px-3 py-2 rounded-lg bg-bg-base border border-border text-sm text-ink font-mono focus:outline-none focus:border-brand-primary/60 resize-y"
-                />
-                <div className="flex justify-end gap-2 mt-2">
-                  <button onClick={() => setEditId(null)} className="px-3 py-1.5 rounded-lg text-xs font-medium text-ink-muted hover:text-ink bg-white/5 transition-colors">Cancel</button>
-                  <button onClick={() => saveEdit(c.id)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-brand-primary text-white hover:bg-blue-600 transition-colors">
-                    <Save className="w-3.5 h-3.5" />Save
-                  </button>
+
+            <div className="px-3 pb-3 space-y-1.5">
+              {/* Module slots */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                {slots.map((slot) => {
+                  const Icon = moduleSlotIcons[slot];
+                  const mod = slot === 'base' ? g.baseModule : slot === 'file-explorer' ? g.fileExplorerModule : slot === 'logger' ? g.loggerModule : g.powershellModule;
+                  const isEditing = editGroupId === g.id && editSlot === slot;
+                  return (
+                    <button
+                      key={slot}
+                      onClick={() => isEditing ? (setEditGroupId(null), setEditSlot(null)) : startEditSlot(g.id, slot)}
+                      className={cx(
+                        'flex items-center gap-1.5 px-2 py-2 rounded-lg text-left transition-all ring-1',
+                        isEditing ? 'bg-brand-primary/15 ring-brand-primary/40' : 'bg-bg-card ring-border-subtle hover:ring-border'
+                      )}
+                    >
+                      <Icon className={cx('w-3.5 h-3.5 flex-shrink-0', isEditing ? 'text-brand-primary' : 'text-ink-faint')} />
+                      <div className="leading-tight min-w-0">
+                        <p className="text-[10px] font-medium text-ink-muted">{moduleSlotLabels[slot]}</p>
+                        <p className="text-[10px] text-ink truncate">{mod.name}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Inline editor */}
+              {editGroupId === g.id && editSlot && (
+                <div className="rounded-lg ring-1 ring-brand-primary/20 bg-brand-primary/5 p-3 animate-fade-in space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-3.5 h-3.5 text-brand-primary" />
+                    <p className="text-[11px] font-semibold text-ink">Edit {moduleSlotLabels[editSlot]}</p>
+                  </div>
+                  <LabeledInput label="Module Name" value={editName} onChange={setEditName} placeholder="Module name" />
+                  <div>
+                    <label className="block text-[11px] font-medium text-ink-muted mb-1.5">Content</label>
+                    <textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      rows={6}
+                      className="w-full px-3 py-2 rounded-lg bg-bg-base border border-border text-sm text-ink font-mono focus:outline-none focus:border-brand-primary/60 resize-y"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => { setEditGroupId(null); setEditSlot(null); }} className="px-3 py-1.5 rounded-lg text-xs font-medium text-ink-muted hover:text-ink bg-white/5 transition-colors">Cancel</button>
+                    <button onClick={saveSlot} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-brand-primary text-white hover:bg-blue-600 transition-colors">
+                      <Save className="w-3.5 h-3.5" />Save
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Company assignment */}
+              <div className="pt-2 border-t border-border-subtle">
+                <p className="text-[10px] uppercase tracking-wide text-ink-faint mb-1.5">Assigned Companies</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                  {companies.map((c) => {
+                    const has = g.companyIds.includes(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => toggleCompany(g.id, c.id)}
+                        className={cx(
+                          'flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all',
+                          has
+                            ? 'bg-brand-primary/15 text-ink ring-1 ring-brand-primary/40'
+                            : 'bg-bg-card text-ink-muted ring-1 ring-border-subtle hover:text-ink'
+                        )}
+                      >
+                        <span className={cx('w-3.5 h-3.5 rounded flex items-center justify-center flex-shrink-0', has ? 'bg-brand-primary' : 'bg-gray-700')}>
+                          {has && <Check className="w-2.5 h-2.5 text-white" />}
+                        </span>
+                        {c.name}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-            )}
+            </div>
           </div>
         ))}
       </div>
@@ -343,7 +436,7 @@ function ServersSection() {
   const [serverList, setServerList] = useState<ServerInfo[]>(servers);
   const [openId, setOpenId] = useState<string | null>(servers[0]?.id ?? null);
   const [showAdd, setShowAdd] = useState(false);
-  const [newSrv, setNewSrv] = useState({ name: '', domains: '', ips: '' });
+  const [newSrv, setNewSrv] = useState({ name: '', dKeyCount: 3, aKeyCount: 3, sKeyCount: 3 });
 
   const updateKey = (serverId: string, keyType: 'dKeys' | 'aKeys' | 'sKeys', keyId: string, value: string) => {
     setServerList((prev) => prev.map((s) => {
@@ -352,17 +445,34 @@ function ServersSection() {
     }));
   };
 
+  const addKey = (serverId: string, keyType: 'dKeys' | 'aKeys' | 'sKeys') => {
+    setServerList((prev) => prev.map((s) => {
+      if (s.id !== serverId) return s;
+      const keys = s[keyType];
+      const prefix = keyType === 'dKeys' ? 'd' : keyType === 'aKeys' ? 'a' : 's';
+      const newKey: ServerKey = { id: `${s.id}-${prefix}${keys.length + 1}-${Date.now()}`, label: `${prefix.toUpperCase()}-Key ${keys.length + 1}`, value: `${prefix}-${s.name.toLowerCase()}-${(keys.length + 1).toString().padStart(2, '0')}` };
+      return { ...s, [keyType]: [...keys, newKey] };
+    }));
+  };
+
+  const removeKey = (serverId: string, keyType: 'dKeys' | 'aKeys' | 'sKeys', keyId: string) => {
+    setServerList((prev) => prev.map((s) => {
+      if (s.id !== serverId) return s;
+      return { ...s, [keyType]: s[keyType].filter((k) => k.id !== keyId) };
+    }));
+  };
+
   const addServer = () => {
     if (!newSrv.name) return;
     const id = `srv${Date.now()}`;
-    const domains = newSrv.domains.split(',').map((d) => d.trim()).filter(Boolean);
-    const ips = newSrv.ips.split(',').map((d) => d.trim()).filter(Boolean);
-    const mkKeys = (prefix: string): ServerKey[] => [1, 2, 3].map((n) => ({ id: `${id}-${prefix}${n}`, label: `${prefix.toUpperCase()}-Key ${n}`, value: `${prefix}-${id.slice(3)}-${n.toString().padStart(2, '0')}` }));
+    const mkKeys = (prefix: string, count: number): ServerKey[] => Array.from({ length: count }, (_, n) => ({ id: `${id}-${prefix}${n + 1}`, label: `${prefix.toUpperCase()}-Key ${n + 1}`, value: `${prefix}-${id.slice(3)}-${(n + 1).toString().padStart(2, '0')}` }));
     setServerList((prev) => [...prev, {
-      id, name: newSrv.name, domains, ips,
-      dKeys: mkKeys('d'), aKeys: mkKeys('a'), sKeys: mkKeys('s'),
+      id, name: newSrv.name,
+      dKeys: mkKeys('d', newSrv.dKeyCount),
+      aKeys: mkKeys('a', newSrv.aKeyCount),
+      sKeys: mkKeys('s', newSrv.sKeyCount),
     }]);
-    setNewSrv({ name: '', domains: '', ips: '' });
+    setNewSrv({ name: '', dKeyCount: 3, aKeyCount: 3, sKeyCount: 3 });
     setShowAdd(false);
     setOpenId(id);
   };
@@ -373,7 +483,7 @@ function ServersSection() {
   };
 
   return (
-    <SectionCard title="Servers" desc="View server details: domains, IPs, and keys (3 D-keys, 3 A-keys, 3 S-keys).">
+    <SectionCard title="Servers" desc="Manage servers and their keys. Each server can have a different number of D, A, and S keys.">
       <button
         onClick={() => setShowAdd((s) => !s)}
         className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-brand-primary/10 text-brand-primary ring-1 ring-brand-primary/30 hover:bg-brand-primary/20 transition-all mb-4"
@@ -383,10 +493,20 @@ function ServersSection() {
 
       {showAdd && (
         <div className="rounded-lg ring-1 ring-brand-primary/20 bg-brand-primary/5 p-4 mb-4 animate-fade-in space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <LabeledInput label="Server Name" value={newSrv.name} onChange={(v) => setNewSrv({ ...newSrv, name: v })} placeholder="PROD-WEB-02" />
-            <LabeledInput label="Domains (comma-separated)" value={newSrv.domains} onChange={(v) => setNewSrv({ ...newSrv, domains: v })} placeholder="app.example.io, api.example.io" />
-            <LabeledInput label="IP Addresses (comma-separated)" value={newSrv.ips} onChange={(v) => setNewSrv({ ...newSrv, ips: v })} placeholder="10.0.1.20, 10.0.1.21" />
+            <div>
+              <label className="block text-[11px] font-medium text-ink-muted mb-1.5">D-Keys Count</label>
+              <input type="number" min={1} max={20} value={newSrv.dKeyCount} onChange={(e) => setNewSrv({ ...newSrv, dKeyCount: Math.max(1, Number(e.target.value)) })} className="w-full h-10 px-3 rounded-lg bg-bg-base border border-border text-sm text-ink focus:outline-none focus:border-brand-primary/60" />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-ink-muted mb-1.5">A-Keys Count</label>
+              <input type="number" min={1} max={20} value={newSrv.aKeyCount} onChange={(e) => setNewSrv({ ...newSrv, aKeyCount: Math.max(1, Number(e.target.value)) })} className="w-full h-10 px-3 rounded-lg bg-bg-base border border-border text-sm text-ink focus:outline-none focus:border-brand-primary/60" />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-ink-muted mb-1.5">S-Keys Count</label>
+              <input type="number" min={1} max={20} value={newSrv.sKeyCount} onChange={(e) => setNewSrv({ ...newSrv, sKeyCount: Math.max(1, Number(e.target.value)) })} className="w-full h-10 px-3 rounded-lg bg-bg-base border border-border text-sm text-ink focus:outline-none focus:border-brand-primary/60" />
+            </div>
           </div>
           <div className="flex justify-end gap-2">
             <button onClick={() => setShowAdd(false)} className="px-3 py-2 rounded-lg text-xs font-medium text-ink-muted hover:text-ink bg-white/5 transition-colors">Cancel</button>
@@ -409,7 +529,7 @@ function ServersSection() {
               </div>
               <div className="leading-tight text-left flex-1">
                 <p className="text-xs font-semibold text-ink">{srv.name}</p>
-                <p className="text-[10px] text-ink-muted">{srv.domains.length} domains · {srv.ips.length} IPs</p>
+                <p className="text-[10px] text-ink-muted">{srv.dKeys.length} D-keys · {srv.aKeys.length} A-keys · {srv.sKeys.length} S-keys</p>
               </div>
               <button
                 onClick={(e) => { e.stopPropagation(); deleteServer(srv.id); }}
@@ -422,30 +542,9 @@ function ServersSection() {
 
             {openId === srv.id && (
               <div className="px-3 pb-3 pt-1 border-t border-border-subtle animate-fade-in space-y-4">
-                {/* Domains */}
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide text-ink-faint mb-1.5 flex items-center gap-1"><Globe className="w-3 h-3" />Domains</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {srv.domains.map((d) => (
-                      <span key={d} className="text-[11px] font-mono text-ink-muted px-2 py-1 rounded-md bg-bg-base ring-1 ring-border-subtle">{d}</span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* IPs */}
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide text-ink-faint mb-1.5 flex items-center gap-1"><Server className="w-3 h-3" />IP Addresses</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {srv.ips.map((ip) => (
-                      <span key={ip} className="text-[11px] font-mono text-ink-muted px-2 py-1 rounded-md bg-bg-base ring-1 ring-border-subtle">{ip}</span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Keys */}
-                <KeyGroup label="D-Keys" keys={srv.dKeys} onChange={(keyId, val) => updateKey(srv.id, 'dKeys', keyId, val)} />
-                <KeyGroup label="A-Keys" keys={srv.aKeys} onChange={(keyId, val) => updateKey(srv.id, 'aKeys', keyId, val)} />
-                <KeyGroup label="S-Keys" keys={srv.sKeys} onChange={(keyId, val) => updateKey(srv.id, 'sKeys', keyId, val)} />
+                <KeyGroup label="D-Keys" keys={srv.dKeys} onChange={(keyId, val) => updateKey(srv.id, 'dKeys', keyId, val)} onAdd={() => addKey(srv.id, 'dKeys')} onRemove={(keyId) => removeKey(srv.id, 'dKeys', keyId)} />
+                <KeyGroup label="A-Keys" keys={srv.aKeys} onChange={(keyId, val) => updateKey(srv.id, 'aKeys', keyId, val)} onAdd={() => addKey(srv.id, 'aKeys')} onRemove={(keyId) => removeKey(srv.id, 'aKeys', keyId)} />
+                <KeyGroup label="S-Keys" keys={srv.sKeys} onChange={(keyId, val) => updateKey(srv.id, 'sKeys', keyId, val)} onAdd={() => addKey(srv.id, 'sKeys')} onRemove={(keyId) => removeKey(srv.id, 'sKeys', keyId)} />
               </div>
             )}
           </div>
@@ -455,10 +554,17 @@ function ServersSection() {
   );
 }
 
-function KeyGroup({ label, keys, onChange }: { label: string; keys: ServerKey[]; onChange: (keyId: string, value: string) => void }) {
+function KeyGroup({ label, keys, onChange, onAdd, onRemove }: { label: string; keys: ServerKey[]; onChange: (keyId: string, value: string) => void; onAdd: () => void; onRemove: (keyId: string) => void }) {
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-wide text-ink-faint mb-1.5 flex items-center gap-1"><Key className="w-3 h-3" />{label}</p>
+      <div className="flex items-center gap-2 mb-1.5">
+        <Key className="w-3 h-3 text-ink-faint" />
+        <p className="text-[10px] uppercase tracking-wide text-ink-faint">{label}</p>
+        <span className="text-[10px] text-ink-faint">({keys.length})</span>
+        <button onClick={onAdd} className="ml-auto inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20 transition-colors">
+          <Plus className="w-2.5 h-2.5" />Add
+        </button>
+      </div>
       <div className="space-y-1.5">
         {keys.map((k) => (
           <div key={k.id} className="flex items-center gap-2">
@@ -468,6 +574,9 @@ function KeyGroup({ label, keys, onChange }: { label: string; keys: ServerKey[];
               onChange={(e) => onChange(k.id, e.target.value)}
               className="flex-1 h-8 px-2 rounded-md bg-bg-base border border-border-subtle text-[11px] font-mono text-ink focus:outline-none focus:border-brand-primary/60 transition-colors"
             />
+            <button onClick={() => onRemove(k.id)} className="p-1 rounded-md text-ink-faint hover:text-red-400 hover:bg-white/5 transition-colors flex-shrink-0">
+              <X className="w-3 h-3" />
+            </button>
           </div>
         ))}
       </div>
