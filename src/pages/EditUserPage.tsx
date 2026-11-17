@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Save, X, Upload, ArrowLeft, Globe, Plus, Trash2 } from 'lucide-react';
+import { Save, X, Upload, ArrowLeft, Globe } from 'lucide-react';
 import type { SiteUser } from '@/types';
 import { getUser, companies } from '@/mockData';
 import { cx, flagUrl, allCountries } from '@/lib/utils';
@@ -17,10 +17,10 @@ export function EditUserPage({ editId, onSave, onCancel }: Props) {
   const isEdit = !!existing;
 
   const [fullName, setFullName] = useState(existing?.fullName ?? '');
-  const [username, setUsername] = useState(existing?.username ?? '');
+  const username = existing?.username ?? '';
   const [company, setCompany] = useState(existing?.company ?? companies[0]?.name ?? '');
-  const [ip, setIp] = useState(existing?.ip ?? '');
-  const [extraIps, setExtraIps] = useState<string[]>(existing?.ips.slice(1) ?? []);
+  const [ip] = useState(existing?.ip ?? '');
+  const [extraIps] = useState<string[]>(existing?.ips.slice(1) ?? []);
   const [countryCode, setCountryCode] = useState(existing?.countryCode ?? 'US');
   const [role, setRole] = useState<SiteUser['role']>(existing?.role ?? 'Member');
   const [avatar, setAvatar] = useState(existing?.avatar ?? '');
@@ -72,7 +72,7 @@ export function EditUserPage({ editId, onSave, onCancel }: Props) {
         {/* Identity */}
         <Section title="Identity">
           <Field label="Full Name"><input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Alex Morgan" className={inputCls} /></Field>
-          <Field label="Username"><input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="@alexm" className={inputCls} /></Field>
+          <Field label="Username"><input value={username} readOnly className={cx(inputCls, 'opacity-70 cursor-not-allowed')} /></Field>
           <Field label="Role">
             <select value={role} onChange={(e) => setRole(e.target.value as SiteUser['role'])} className={inputCls}>
               {roles.map((r) => (<option key={r} value={r}>{r}</option>))}
@@ -88,7 +88,7 @@ export function EditUserPage({ editId, onSave, onCancel }: Props) {
             </select>
           </Field>
           <Field label="Public IP Address">
-            <input value={ip} onChange={(e) => setIp(e.target.value)} placeholder="203.0.113.42" className={inputCls} />
+            <input value={ip} readOnly className={cx(inputCls, 'opacity-70 cursor-not-allowed')} />
           </Field>
           <Field label="Country">
             <div className="relative">
@@ -102,30 +102,15 @@ export function EditUserPage({ editId, onSave, onCancel }: Props) {
         </Section>
 
         <Section title="Known IP Addresses">
-          <p className="col-span-full text-[11px] text-ink-muted -mt-1">Addresses this user has connected from. The main IP shows in the overview.</p>
+          <p className="col-span-full text-[11px] text-ink-muted -mt-1">Addresses this user has connected from (read-only). The main IP shows in the overview.</p>
           {extraIps.map((addr, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <input
-                value={addr}
-                onChange={(e) => setExtraIps((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))}
-                placeholder="198.51.100.23"
-                className={inputCls}
-              />
-              <button
-                onClick={() => setExtraIps((prev) => prev.filter((_, j) => j !== i))}
-                className="p-2 rounded-lg text-ink-faint hover:text-red-400 hover:bg-red-500/10 transition-colors focus-ring flex-shrink-0"
-                aria-label="Remove IP address"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
+            <input
+              key={i}
+              value={addr}
+              readOnly
+              className={cx(inputCls, 'opacity-70 cursor-not-allowed')}
+            />
           ))}
-          <button
-            onClick={() => setExtraIps((prev) => [...prev, ''])}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-brand-primary bg-brand-primary/10 ring-1 ring-brand-primary/30 hover:bg-brand-primary/20 transition-colors focus-ring w-fit"
-          >
-            <Plus className="w-3.5 h-3.5" />Add IP Address
-          </button>
         </Section>
       </div>
     </div>
