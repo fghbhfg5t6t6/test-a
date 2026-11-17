@@ -8,6 +8,6 @@ export function clamp(v: number, min: number, max: number): number {
 
 export function flagUrl(code: string, size: 'sm' | 'md' = 'sm'): string {
   const c = code.toLowerCase();
-  const w = size === 'sm' ? 40 : 80;
+  const w = size === 'sm' ? 'w40' : 'w80';
   return `https://flagcdn.com/${w}/${c}.png`;
 }
