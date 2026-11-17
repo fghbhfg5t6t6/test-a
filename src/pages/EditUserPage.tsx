@@ -88,7 +88,15 @@ export function EditUserPage({ editId, onSave, onCancel }: Props) {
             </select>
           </Field>
           <Field label="Public IP Address">
-            <input value={ip} readOnly className={cx(inputCls, 'opacity-70 cursor-not-allowed')} />
+            <a
+              href={`https://www.iplocation.net/?ip=${ip}`}
+              target="_blank"
+              rel="noreferrer"
+              className={cx(inputCls, 'opacity-70 flex items-center hover:opacity-100 hover:border-brand-primary/60 transition-all')}
+              title={`View IP info for ${ip}`}
+            >
+              <span className="font-mono truncate">{ip}</span>
+            </a>
           </Field>
           <Field label="Country">
             <div className="relative">
@@ -103,13 +111,17 @@ export function EditUserPage({ editId, onSave, onCancel }: Props) {
 
         <Section title="Known IP Addresses">
           <p className="col-span-full text-[11px] text-ink-muted -mt-1">Addresses this user has connected from (read-only). The main IP shows in the overview.</p>
-          {extraIps.map((addr, i) => (
-            <input
-              key={i}
-              value={addr}
-              readOnly
-              className={cx(inputCls, 'opacity-70 cursor-not-allowed')}
-            />
+          {extraIps.map((addr) => (
+            <a
+              key={addr}
+              href={`https://www.iplocation.net/?ip=${addr}`}
+              target="_blank"
+              rel="noreferrer"
+              className={cx(inputCls, 'opacity-70 flex items-center hover:opacity-100 hover:border-brand-primary/60 transition-all')}
+              title={`View IP info for ${addr}`}
+            >
+              <span className="font-mono truncate">{addr}</span>
+            </a>
           ))}
         </Section>
       </div>
