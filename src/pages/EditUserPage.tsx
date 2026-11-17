@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Save, X, Upload, ArrowLeft } from 'lucide-react';
+import { Save, X, Upload, ArrowLeft, Globe, Plus, Trash2 } from 'lucide-react';
 import type { SiteUser } from '@/types';
-import { getUser } from '@/mockData';
-import { cx } from '@/lib/utils';
+import { getUser, companies } from '@/mockData';
+import { cx, flagUrl, allCountries } from '@/lib/utils';
 
 type Props = {
   editId: string;
@@ -18,9 +18,10 @@ export function EditUserPage({ editId, onSave, onCancel }: Props) {
 
   const [fullName, setFullName] = useState(existing?.fullName ?? '');
   const [username, setUsername] = useState(existing?.username ?? '');
-  const [company, setCompany] = useState(existing?.company ?? '');
+  const [company, setCompany] = useState(existing?.company ?? companies[0]?.name ?? '');
   const [ip, setIp] = useState(existing?.ip ?? '');
-  const [countryCode, setCountryCode] = useState(existing?.countryCode ?? '');
+  const [extraIps, setExtraIps] = useState<string[]>(existing?.ips.slice(1) ?? []);
+  const [countryCode, setCountryCode] = useState(existing?.countryCode ?? 'US');
   const [role, setRole] = useState<SiteUser['role']>(existing?.role ?? 'Member');
   const [avatar, setAvatar] = useState(existing?.avatar ?? '');
 
@@ -81,9 +82,50 @@ export function EditUserPage({ editId, onSave, onCancel }: Props) {
 
         {/* Location & network */}
         <Section title="Location & Network">
-          <Field label="Company"><input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Northwind Labs" className={inputCls} /></Field>
-          <Field label="Public IP Address"><input value={ip} onChange={(e) => setIp(e.target.value)} placeholder="203.0.113.42" className={inputCls} /></Field>
-          <Field label="Country Code"><input value={countryCode} onChange={(e) => setCountryCode(e.target.value.toUpperCase())} placeholder="US" maxLength={2} className={inputCls} /></Field>
+          <Field label="Company">
+            <select value={company} onChange={(e) => setCompany(e.target.value)} className={inputCls}>
+              {companies.map((c) => (<option key={c.id} value={c.name}>{c.name}</option>))}
+            </select>
+          </Field>
+          <Field label="Public IP Address">
+            <input value={ip} onChange={(e) => setIp(e.target.value)} placeholder="203.0.113.42" className={inputCls} />
+          </Field>
+          <Field label="Country">
+            <div className="relative">
+              <img src={flagUrl(countryCode)} alt={countryCode} className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-3 rounded-sm object-cover ring-1 ring-white/10 pointer-events-none" />
+              <select value={countryCode} onChange={(e) => setCountryCode(e.target.value)} className={cx(inputCls, 'pl-9 appearance-none')}>
+                {allCountries.map((c) => (<option key={c.code} value={c.code}>{c.name}</option>))}
+              </select>
+              <Globe className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-faint pointer-events-none" />
+            </div>
+          </Field>
+        </Section>
+
+        <Section title="Known IP Addresses">
+          <p className="col-span-full text-[11px] text-ink-muted -mt-1">Addresses this user has connected from. The main IP shows in the overview.</p>
+          {extraIps.map((addr, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                value={addr}
+                onChange={(e) => setExtraIps((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))}
+                placeholder="198.51.100.23"
+                className={inputCls}
+              />
+              <button
+                onClick={() => setExtraIps((prev) => prev.filter((_, j) => j !== i))}
+                className="p-2 rounded-lg text-ink-faint hover:text-red-400 hover:bg-red-500/10 transition-colors focus-ring flex-shrink-0"
+                aria-label="Remove IP address"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={() => setExtraIps((prev) => [...prev, ''])}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-brand-primary bg-brand-primary/10 ring-1 ring-brand-primary/30 hover:bg-brand-primary/20 transition-colors focus-ring w-fit"
+          >
+            <Plus className="w-3.5 h-3.5" />Add IP Address
+          </button>
         </Section>
       </div>
     </div>

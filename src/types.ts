@@ -146,6 +146,7 @@ export type SiteUser = {
   username: string;
   avatar: string;
   company: string;
+  ips: string[];
   ip: string;
   countryCode: string;
   countryName: string;
@@ -164,6 +165,8 @@ export type SiteUser = {
   recordings: Recording[];
   moduleAssignments: ModuleAssignment[];
 };
+
+export type CountryOption = { code: string; name: string };
 
 export type Company = {
   id: string;

@@ -249,6 +249,7 @@ function makeUser(p: {
   avIdx: number;
   company: string;
   ip: string;
+  extraIps: string[];
   cc: string;
   country: string;
   online: boolean;
@@ -264,6 +265,7 @@ function makeUser(p: {
     username: p.username,
     avatar: AVATARS[p.avIdx % AVATARS.length],
     company: p.company,
+    ips: [p.ip, ...(p.extraIps ?? [])],
     ip: p.ip,
     countryCode: p.cc,
     countryName: p.country,
@@ -315,14 +317,14 @@ function makeUser(p: {
 }
 
 const rawUsers: {
-  id: string; fullName: string; username: string; avIdx: number; company: string; ip: string;
+  id: string; fullName: string; username: string; avIdx: number; company: string; ip: string; extraIps?: string[];
   cc: string; country: string; online: boolean; lastSeen: string;
   lastSeenGroup: SiteUser['lastSeenGroup'];
   base: [string, string, string, string, string, string]; friendIds: string[];
   moduleAssignments?: ModuleAssignment[];
 }[] = [
-  { id: 'u1', fullName: 'Alex Morgan', username: '@alexm', avIdx: 0, company: 'Northwind Labs', ip: '203.0.113.42', cc: 'US', country: 'United States', online: true, lastSeen: '25 seconds ago', lastSeenGroup: 'just now', base: ['corp.northwind.io', 'WS-ALEX-01', '6.9.12-arch1-1', 'Arch Linux', '246810', 'Admin'], friendIds: ['u2', 'u3', 'u4'] },
-  { id: 'u2', fullName: 'Priya Shah', username: '@priya', avIdx: 1, company: 'Helios Systems', ip: '198.51.100.23', cc: 'IN', country: 'India', online: true, lastSeen: '2 minutes ago', lastSeenGroup: 'just now', base: ['helios.internal', 'WS-PRY-02', '6.8.0-ubuntu-22.04', 'Ubuntu 24.04 LTS', '246801', 'User'], friendIds: ['u1', 'u5'] },
+  { id: 'u1', fullName: 'Alex Morgan', username: '@alexm', avIdx: 0, company: 'Northwind Labs', ip: '203.0.113.42', extraIps: ['203.0.113.44', '198.51.100.7'], cc: 'US', country: 'United States', online: true, lastSeen: '25 seconds ago', lastSeenGroup: 'just now', base: ['corp.northwind.io', 'WS-ALEX-01', '6.9.12-arch1-1', 'Arch Linux', '246810', 'Admin'], friendIds: ['u2', 'u3', 'u4'] },
+  { id: 'u2', fullName: 'Priya Shah', username: '@priya', avIdx: 1, company: 'Helios Systems', ip: '198.51.100.23', extraIps: ['103.21.244.18'], cc: 'IN', country: 'India', online: true, lastSeen: '2 minutes ago', lastSeenGroup: 'just now', base: ['helios.internal', 'WS-PRY-02', '6.8.0-ubuntu-22.04', 'Ubuntu 24.04 LTS', '246801', 'User'], friendIds: ['u1', 'u5'] },
   { id: 'u3', fullName: 'Liam Becker', username: '@liam', avIdx: 2, company: 'Vertex GmbH', ip: '192.0.2.88', cc: 'DE', country: 'Germany', online: false, lastSeen: '3 hours ago', lastSeenGroup: 'today', base: ['vertex.de', 'WS-LBM-03', '6.11.0-fedora-40', 'Fedora 40', '246790', 'User'], friendIds: ['u1', 'u4'] },
   { id: 'u4', fullName: 'Sofia Rossi', username: '@sofia', avIdx: 3, company: 'Azzurra SRL', ip: '203.0.113.77', cc: 'IT', country: 'Italy', online: true, lastSeen: '14 minutes ago', lastSeenGroup: 'just now', base: ['azzurra.it', 'WS-SOF-04', '6.9.0-debian-12', 'Debian 12', '246788', 'Admin'], friendIds: ['u1', 'u3'] },
   { id: 'u5', fullName: 'Yuki Tanaka', username: '@yuki', avIdx: 4, company: 'Sakura Tech', ip: '198.51.100.91', cc: 'JP', country: 'Japan', online: false, lastSeen: '5 days ago', lastSeenGroup: 'older', base: ['sakura.jp', 'WS-YUK-05', '6.8.0-arch1-1', 'Arch Linux', '246770', 'User'], friendIds: ['u2'] },
