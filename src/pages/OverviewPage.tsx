@@ -1,7 +1,8 @@
-import { Search, ChevronDown, Pencil, Settings2 } from 'lucide-react';
+import { Search, ChevronDown, Pencil, Settings2, AlertCircle, Loader2, Users, Wifi } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { users, adminUser, companies } from '@/mockData';
+import { useUsers, useUserStats, toErrMsg } from '@/lib/hooks';
 import { Badge } from '@/components/ui/Badge';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { cx, flagUrl } from '@/lib/utils';
 
 type Props = {
@@ -23,13 +24,23 @@ export function OverviewPage({ onManage, onEdit }: Props) {
   const [countryFilter, setCountryFilter] = useState('All');
   const [lastSeenFilter, setLastSeenFilter] = useState<string>('All');
 
+  const { data: stats } = useUserStats();
+  const { data: users, loading, error, refetch } = useUsers();
+
   const countries = useMemo(() => {
     const set = new Map<string, string>();
-    users.forEach((u) => set.set(u.countryCode, u.countryName));
+    users?.forEach((u) => set.set(u.countryCode, u.countryName));
     return [...set.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, []);
+  }, [users]);
+
+  const companyNames = useMemo(() => {
+    const set = new Set<string>();
+    users?.forEach((u) => set.add(u.company));
+    return [...set].sort();
+  }, [users]);
 
   const filtered = useMemo(() => {
+    if (!users) return [];
     return users.filter((u) => {
       const matchesQuery =
         !query ||
@@ -41,25 +52,32 @@ export function OverviewPage({ onManage, onEdit }: Props) {
       const matchesLastSeen = lastSeenFilter === 'All' || u.lastSeenGroup === lastSeenFilter;
       return matchesQuery && matchesCompany && matchesCountry && matchesLastSeen;
     });
-  }, [query, companyFilter, countryFilter, lastSeenFilter]);
+  }, [users, query, companyFilter, countryFilter, lastSeenFilter]);
+
+  const onlineCount = users?.filter((u) => u.online).length ?? 0;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Admin header */}
       <div className="flex items-center gap-3 px-4 lg:px-6 py-3 border-b border-border bg-bg-card/40">
-        <div className="relative flex-shrink-0">
-          <img src={adminUser.avatar} alt={adminUser.fullName} className="w-9 h-9 rounded-full object-cover ring-1 ring-border" />
-          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-brand-success ring-2 ring-bg-card" />
-        </div>
-        <div className="leading-tight">
-          <p className="text-sm font-semibold text-ink">{adminUser.fullName}</p>
-          <p className="text-[11px] text-ink-muted">{adminUser.role} · viewing overview</p>
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 rounded-lg bg-brand-primary/10 ring-1 ring-brand-primary/30 flex items-center justify-center flex-shrink-0">
+            <Users className="w-4.5 h-4.5 text-brand-primary" />
+          </div>
+          <div className="leading-tight">
+            <p className="text-sm font-semibold text-ink">User Overview</p>
+            <p className="text-[11px] text-ink-muted">Monitoring dashboard</p>
+          </div>
         </div>
         <div className="ml-auto hidden sm:flex items-center gap-1.5 text-[11px] text-ink-muted">
-          <span className="px-2 py-0.5 rounded-md bg-white/5 ring-1 ring-border-subtle">{users.length} users</span>
-          <span className="px-2 py-0.5 rounded-md bg-emerald-900/30 text-emerald-400 ring-1 ring-emerald-500/30">
-            {users.filter((u) => u.online).length} online
-          </span>
+          {stats && (
+            <>
+              <span className="px-2 py-0.5 rounded-md bg-white/5 ring-1 ring-border-subtle">{stats.total} users</span>
+              <span className="px-2 py-0.5 rounded-md bg-emerald-900/30 text-emerald-400 ring-1 ring-emerald-500/30 flex items-center gap-1">
+                <Wifi className="w-3 h-3" />{stats.online_now} online
+              </span>
+            </>
+          )}
         </div>
       </div>
 
@@ -75,7 +93,7 @@ export function OverviewPage({ onManage, onEdit }: Props) {
           />
         </div>
 
-        <FilterDropdown label="Company" value={companyFilter} onChange={setCompanyFilter} options={['All', ...companies.map((c) => c.name)]} />
+        <FilterDropdown label="Company" value={companyFilter} onChange={setCompanyFilter} options={['All', ...companyNames]} />
         <FilterDropdown
           label="Country"
           value={countryFilter}
@@ -94,70 +112,108 @@ export function OverviewPage({ onManage, onEdit }: Props) {
 
       {/* Table */}
       <div className="flex-1 overflow-auto">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 z-10 bg-bg-card">
-            <tr className="text-left text-[11px] uppercase tracking-wide text-ink-faint">
-              <th className="px-4 lg:px-6 py-2.5 font-medium">User</th>
-              <th className="px-3 py-2.5 font-medium hidden md:table-cell">Company</th>
-              <th className="px-3 py-2.5 font-medium hidden lg:table-cell">IP Address</th>
-              <th className="px-3 py-2.5 font-medium">Country</th>
-              <th className="px-3 py-2.5 font-medium">Status</th>
-              <th className="px-3 py-2.5 font-medium hidden md:table-cell">Last seen</th>
-              <th className="px-3 py-2.5 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((u) => (
-              <tr key={u.id} className="border-t border-border-subtle hover:bg-white/[0.02] transition-colors">
-                <td className="px-4 lg:px-6 py-2.5">
-                  <div className="flex items-center gap-2.5">
-                    <div className="relative flex-shrink-0">
-                      <img src={u.avatar} alt={u.fullName} className="w-8 h-8 rounded-full object-cover ring-1 ring-border" />
-                      <span className={cx('absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-bg-base', u.online ? 'bg-brand-success' : 'bg-gray-500')} />
-                    </div>
-                    <div className="leading-tight min-w-0">
-                      <p className="text-xs font-semibold text-ink truncate">{u.fullName}</p>
-                      <p className="text-[10px] text-ink-muted truncate">{u.username}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-3 py-2.5 hidden md:table-cell text-xs text-ink-muted">{u.company}</td>
-                <td className="px-3 py-2.5 hidden lg:table-cell">
-                  <a href={`https://www.iplocation.net/?ip=${u.ip}`} target="_blank" rel="noreferrer" className="text-xs text-ink-muted hover:text-brand-primary transition-colors font-mono">{u.ip}</a>
-                </td>
-                <td className="px-3 py-2.5">
-                  <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted">
-                    <img src={flagUrl(u.countryCode)} alt={u.countryCode} className="w-4 h-3 rounded-sm flex-shrink-0 object-cover ring-1 ring-white/10" loading="lazy" />
-                    <span className="hidden xl:inline">{u.countryName}</span>
-                    <span className="xl:hidden">{u.countryCode}</span>
-                  </span>
-                </td>
-                <td className="px-3 py-2.5">
-                  <Badge variant={u.online ? 'success' : 'muted'} dot>{u.online ? 'Online' : 'Offline'}</Badge>
-                </td>
-                <td className="px-3 py-2.5 hidden md:table-cell text-xs text-ink-muted">{u.lastSeen}</td>
-                <td className="px-3 py-2.5">
-                  <div className="flex items-center justify-end gap-1.5">
-                    <button onClick={() => onManage(u.id)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-brand-primary/15 text-brand-primary hover:bg-brand-primary hover:text-white transition-all focus-ring">
-                      <Settings2 className="w-3 h-3" />Manage
-                    </button>
-                    <button onClick={() => onEdit(u.id)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-white/5 text-ink-muted hover:bg-white/10 hover:text-ink transition-all focus-ring">
-                      <Pencil className="w-3 h-3" />Edit
-                    </button>
-                  </div>
-                </td>
-              </tr>
+        {loading ? (
+          <div className="p-4 lg:p-6 space-y-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="w-8 h-8 rounded-full" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-3 w-32" />
+                  <Skeleton className="h-2.5 w-24" />
+                </div>
+                <Skeleton className="h-3 w-40" />
+              </div>
             ))}
-          </tbody>
-        </table>
-        {filtered.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-12 h-12 rounded-full bg-bg-card flex items-center justify-center mb-3">
-              <Search className="w-5 h-5 text-ink-faint" />
-            </div>
-            <p className="text-sm text-ink">No users found</p>
-            <p className="text-xs text-ink-muted mt-1">Try a different search or filter</p>
           </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-12 h-12 rounded-full bg-red-500/10 ring-1 ring-red-500/30 flex items-center justify-center mb-3">
+              <AlertCircle className="w-5 h-5 text-red-400" />
+            </div>
+            <p className="text-sm text-ink">Failed to load users</p>
+            <p className="text-xs text-ink-muted mt-1 max-w-sm">{error}</p>
+            <button onClick={refetch} className="mt-3 px-3 py-1.5 rounded-lg text-xs font-medium bg-brand-primary/15 text-brand-primary hover:bg-brand-primary hover:text-white transition-colors">
+              Retry
+            </button>
+          </div>
+        ) : (
+          <>
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-bg-card">
+                <tr className="text-left text-[11px] uppercase tracking-wide text-ink-faint">
+                  <th className="px-4 lg:px-6 py-2.5 font-medium">User</th>
+                  <th className="px-3 py-2.5 font-medium hidden md:table-cell">Company</th>
+                  <th className="px-3 py-2.5 font-medium hidden lg:table-cell">IP Address</th>
+                  <th className="px-3 py-2.5 font-medium">Country</th>
+                  <th className="px-3 py-2.5 font-medium">Status</th>
+                  <th className="px-3 py-2.5 font-medium hidden md:table-cell">Last seen</th>
+                  <th className="px-3 py-2.5 font-medium text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((u) => (
+                  <tr key={u.id} className="border-t border-border-subtle hover:bg-white/[0.02] transition-colors">
+                    <td className="px-4 lg:px-6 py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="relative flex-shrink-0">
+                          {u.avatar ? (
+                            <img src={u.avatar} alt={u.fullName} className="w-8 h-8 rounded-full object-cover ring-1 ring-border" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-bg-base ring-1 ring-border flex items-center justify-center text-[10px] font-semibold text-ink-muted">
+                              {u.fullName.slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                          <span className={cx('absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-bg-base', u.online ? 'bg-brand-success' : 'bg-gray-500')} />
+                        </div>
+                        <div className="leading-tight min-w-0">
+                          <p className="text-xs font-semibold text-ink truncate">{u.fullName}</p>
+                          <p className="text-[10px] text-ink-muted truncate">{u.username}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 hidden md:table-cell text-xs text-ink-muted">{u.company}</td>
+                    <td className="px-3 py-2.5 hidden lg:table-cell">
+                      {u.ip && u.ip !== '—' ? (
+                        <a href={`https://www.iplocation.net/?ip=${u.ip}`} target="_blank" rel="noreferrer" className="text-xs text-ink-muted hover:text-brand-primary transition-colors font-mono">{u.ip}</a>
+                      ) : (
+                        <span className="text-xs text-ink-faint">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted">
+                        <img src={flagUrl(u.countryCode)} alt={u.countryCode} className="w-4 h-3 rounded-sm flex-shrink-0 object-cover ring-1 ring-white/10" loading="lazy" />
+                        <span className="hidden xl:inline">{u.countryName}</span>
+                        <span className="xl:hidden">{u.countryCode}</span>
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <Badge variant={u.online ? 'success' : 'muted'} dot>{u.online ? 'Online' : 'Offline'}</Badge>
+                    </td>
+                    <td className="px-3 py-2.5 hidden md:table-cell text-xs text-ink-muted">{u.lastSeen}</td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button onClick={() => onManage(u.id)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-brand-primary/15 text-brand-primary hover:bg-brand-primary hover:text-white transition-all focus-ring">
+                          <Settings2 className="w-3 h-3" />Manage
+                        </button>
+                        <button onClick={() => onEdit(u.id)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-white/5 text-ink-muted hover:bg-white/10 hover:text-ink transition-all focus-ring">
+                          <Pencil className="w-3 h-3" />Edit
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filtered.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="w-12 h-12 rounded-full bg-bg-card flex items-center justify-center mb-3">
+                  <Search className="w-5 h-5 text-ink-faint" />
+                </div>
+                <p className="text-sm text-ink">No users found</p>
+                <p className="text-xs text-ink-muted mt-1">Try a different search or filter</p>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -205,4 +261,3 @@ function FilterDropdown({
     </div>
   );
 }
-

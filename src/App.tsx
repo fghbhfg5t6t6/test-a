@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { LayoutDashboard, Building2, Settings, LogOut, ChevronLeft, ShieldCheck } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { LayoutDashboard, Building2, Settings, LogOut, ChevronLeft, ShieldCheck, Loader2 } from 'lucide-react';
 import { OverviewPage } from '@/pages/OverviewPage';
 import { UserPage } from '@/pages/UserPage';
 import { CompaniesPage } from '@/pages/CompaniesPage';
 import { EditUserPage } from '@/pages/EditUserPage';
 import { SettingsPage } from '@/pages/SettingsPage';
-import { getUser } from '@/mockData';
+import { LoginPage } from '@/pages/LoginPage';
+import { useAuth, AuthLoadingScreen } from '@/lib/AuthContext';
 import type { ViewId } from '@/types';
 import { cx } from '@/lib/utils';
 
@@ -22,15 +23,31 @@ const menuItems: { id: ViewId; label: string; icon: typeof LayoutDashboard }[] =
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
-export default function App() {
+function Shell() {
+  const { user, logout, isSuperAdmin } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [route, setRoute] = useState<Route>({ name: 'overview' });
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [editUserId, setEditUserId] = useState<string | null>(null);
 
   const navigate = (v: ViewId) => {
-    if (v === 'logout') return;
+    if (v === 'logout') {
+      logout();
+      return;
+    }
     if (v === 'overview') setRoute({ name: 'overview' });
     else if (v === 'companies') setRoute({ name: 'companies' });
     else if (v === 'settings') setRoute({ name: 'settings' });
+  };
+
+  const handleManage = (id: string) => {
+    setSelectedUserId(id);
+    setRoute({ name: 'user', id });
+  };
+
+  const handleEdit = (id: string) => {
+    setEditUserId(id);
+    setRoute({ name: 'edit-user', id });
   };
 
   const activeMenu: ViewId =
@@ -88,6 +105,13 @@ export default function App() {
         </nav>
 
         <div className="px-2 py-3 border-t border-border space-y-1">
+          {/* Current user badge */}
+          {!collapsed && user && (
+            <div className="px-2.5 py-1.5 mb-1">
+              <p className="text-[10px] text-ink-faint truncate">{user.username}</p>
+              <p className="text-[10px] text-brand-primary font-medium">{isSuperAdmin ? 'Super Admin' : 'Admin'}</p>
+            </div>
+          )}
           <button
             onClick={() => navigate('logout')}
             title={collapsed ? 'Logout' : undefined}
@@ -110,23 +134,24 @@ export default function App() {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {route.name === 'overview' && (
-          <OverviewPage
-            onManage={(id) => setRoute({ name: 'user', id })}
-            onEdit={(id) => setRoute({ name: 'edit-user', id })}
-          />
+          <OverviewPage onManage={handleManage} onEdit={handleEdit} />
         )}
-        {route.name === 'user' && getUser(route.id) && (
+        {route.name === 'user' && selectedUserId && (
           <UserPage
-            user={getUser(route.id)!}
-            onBack={() => setRoute({ name: 'overview' })}
-            onFriendClick={(id) => setRoute({ name: 'user', id })}
+            userId={selectedUserId}
+            onBack={() => { setSelectedUserId(null); setRoute({ name: 'overview' }); }}
+            onFriendClick={(id) => { setSelectedUserId(id); setRoute({ name: 'user', id }); }}
           />
         )}
         {route.name === 'companies' && (
           <CompaniesPage onSave={() => setRoute({ name: 'overview' })} onCancel={() => setRoute({ name: 'overview' })} />
         )}
-        {route.name === 'edit-user' && getUser(route.id) && (
-          <EditUserPage editId={route.id} onSave={() => setRoute({ name: 'overview' })} onCancel={() => setRoute({ name: 'overview' })} />
+        {route.name === 'edit-user' && editUserId && (
+          <EditUserPage
+            editId={editUserId}
+            onSave={() => { setEditUserId(null); setRoute({ name: 'overview' }); }}
+            onCancel={() => { setEditUserId(null); setRoute({ name: 'overview' }); }}
+          />
         )}
         {route.name === 'settings' && (
           <SettingsPage onBack={() => setRoute({ name: 'overview' })} />
@@ -134,4 +159,13 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+export default function App() {
+  const { user, loading } = useAuth();
+
+  if (loading) return <AuthLoadingScreen />;
+  if (!user) return <LoginPage />;
+
+  return <Shell />;
 }
